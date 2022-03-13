@@ -43,3 +43,31 @@ class MovieModel:
         else:
             type_name = movie.__class__.__name__
             raise TypeError("Unexpected type {0}".format(type_name))
+          
+        
+  class BooksModel:
+    def __init__(self, params=[]):
+        self.isbn = params[0]
+        self.book_title = params[1]
+        self.book_author = params[2]
+        self.year_of_publication = params[3]
+        self.publisher = params[4]
+        self.image_url = params[5]
+
+
+    def to_dict(book):
+        if isinstance(book, BooksModel):
+            dict = {
+                "isbn": book.isbn,
+                "book_title": book.book_title,
+                "book_author": book.book_author,
+                "year_of_publication": book.year_of_publication,
+                "publisher": book.publisher,
+                "image_url": book.image_url,
+
+            }
+            return dict
+        else:
+            type_name = book.__class__.__name__
+            raise TypeError("Unexpected type {0}".format(type_name))
+
