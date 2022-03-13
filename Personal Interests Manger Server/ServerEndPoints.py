@@ -1,5 +1,6 @@
 from flask import Flask, request
 from MoviesManager import MoviesManager as movieManager
+from BooksManager import BooksManager as bookManager
 
 app = Flask(__name__)
 
@@ -42,22 +43,17 @@ def recommendMovies():
     return None
 
 
-@app.route("/book/search", methods=['GET'])
-def searchForBook():
-    return
-
-
 @app.route("/book/search", methods=['GET'])  #Done
 def searchForBook():
         search_query_id = request.args.get('id')
         search_query_name = request.args.get('name')
         search_query_author = request.args.get('author')
         if search_query_author != None:
-            return bookmanager().findBookByAuthor(search_query_author)
+            return bookManager().findBookByAuthor(search_query_author)
         elif search_query_name != None:
-            return bookmanager().findBookByName(search_query_name)
+            return bookManager().findBookByName(search_query_name)
         elif search_query_id != None:
-            response = bookmanager().findBookById(search_query_id)
+            response = bookManager().findBookById(search_query_id)
             return response
 
 @app.route("/book/rate", methods=['POST', 'GET']) #Done
@@ -67,14 +63,14 @@ def rateBook():
         param_bookId = request.args.get('isbn')
         param_rating = request.args.get('rating')
         if param_bookId != None and param_rating != None and param_userId != None:
-            bookmanager().addBookRatingToDb(int(param_userId), str(param_bookId), float(param_rating))
+            bookManager().addBookRatingToDb(int(param_userId), str(param_bookId), float(param_rating))
         return
     elif (request.method == 'POST'):
         param_userId = request.args.get('user_id')
         param_bookId = request.args.get('isbn')
         param_rating = request.args.get('rating')
         if param_bookId != None and param_rating != None and param_userId != None:
-            bookmanager().addBookRatingToDb(int(param_userId), str(param_bookId), float(param_rating))
+            bookManager().addBookRatingToDb(int(param_userId), str(param_bookId), float(param_rating))
         return
 
 @app.route("/books/recommend", methods=['GET'])
@@ -83,17 +79,5 @@ def recommendBooks():
     return None
 
 
-
-
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
-# movies search --Done
-# movie recommendation --Done
-# book Search
-# Book recommendation
-# Scrapper search
-# User post
-# song search
-# song recommendation
-# chatbot (get-post)
-# http://127.0.0.1:5000/
+    app.run(host="0.0.0.0", debug=True, port=5001)
