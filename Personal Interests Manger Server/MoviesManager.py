@@ -53,10 +53,7 @@ class MoviesManager:
 
     def __extractCastFromResponse(self, response):
         cList = []
-        i = 0
         for castMember in response['cast']:
-            if i == 10:
-                break
             cImage = castMember['profile_path']
             cName = castMember['name']
             cChar = castMember['character']
