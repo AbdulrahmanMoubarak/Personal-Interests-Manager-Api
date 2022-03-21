@@ -1,6 +1,7 @@
 from flask import Flask, request
 from MoviesManager import MoviesManager as movieManager
 from BooksManager import BooksManager as bookManager
+from MusicManager import MusicManager as musicManager
 
 app = Flask(__name__)
 
@@ -18,8 +19,6 @@ def searchForMovie():
         response = movieManager().findMovieById(search_query_id)
         return response
 
-
-
 @app.route("/movies/rate", methods=['POST', 'GET'])
 def rateMovie():
     if (request.method == 'GET'):
@@ -31,19 +30,31 @@ def rateMovie():
         return
     elif (request.method == 'POST'):
         param_userId = request.form.get('userId')
-        param_movieId = request.form.get('movieId')
+        param_movieId = int(request.form.get('movieId'))
         param_rating = request.form.get('rating')
         if param_movieId != None and param_rating != None and param_userId != None:
             movieManager().addMovieRatingToDb(int(param_movieId), int(param_userId), float(param_rating))
         return
 
-@app.route("/movies/recommend", methods=['GET'])
-def recommendMovies():
+@app.route("/movies/main", methods=['GET'])
+def getMoviesMainScreen():
     param_userId = request.args.get('userId')
-    return None
+
+    if param_userId != None:
+        uId = param_userId
+    response = movieManager().getHomePageMovies(param_userId)
+    return response
+
+@app.route("/movies/credits", methods=['GET'])
+def getMovieCredits():
+    param_movieId = request.args.get('movieId')
+    if param_movieId != None:
+        response = movieManager().findMovieCast(param_movieId)
+        return response
 
 
-@app.route("/book/search", methods=['GET'])  #Done
+
+@app.route("/books/search", methods=['GET'])  #Done
 def searchForBook():
         search_query_id = request.args.get('id')
         search_query_name = request.args.get('name')
@@ -56,7 +67,7 @@ def searchForBook():
             response = bookManager().findBookById(search_query_id)
             return response
 
-@app.route("/book/rate", methods=['POST', 'GET']) #Done
+@app.route("/books/rate", methods=['POST', 'GET']) #Done
 def rateBook():
     if (request.method == 'GET'):
         param_userId = request.args.get('user_id')
@@ -73,10 +84,28 @@ def rateBook():
             bookManager().addBookRatingToDb(int(param_userId), str(param_bookId), float(param_rating))
         return
 
-@app.route("/books/recommend", methods=['GET'])
+@app.route("/books/main", methods=['GET'])
 def recommendBooks():
     param_userId = request.args.get('user_id')
     return None
+
+
+@app.route("/music/search", methods=['GET'])
+def searchForSong():
+    search_query = request.args.get('query')
+    search_query_id = request.args.get('id')
+    if search_query_id != None:
+        return musicManager().findSongById(search_query_id)
+    return
+
+@app.route("/music/main", methods=['GET'])
+def getSongsMainScreen():
+    param_userId = request.args.get('userId')
+
+    if param_userId != None:
+        uId = param_userId
+    response = musicManager().getHomePageSongs(param_userId)
+    return response
 
 
 if __name__ == "__main__":
