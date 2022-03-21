@@ -46,9 +46,9 @@ class MovieModel:
         else:
             type_name = movie.__class__.__name__
             raise TypeError("Unexpected type {0}".format(type_name))
-          
-        
-  class BooksModel:
+
+
+class BooksModel:
     def __init__(self, params=[]):
         self.isbn = params[0]
         self.book_title = params[1]
@@ -56,7 +56,6 @@ class MovieModel:
         self.year_of_publication = params[3]
         self.publisher = params[4]
         self.image_url = params[5]
-
 
     def to_dict(book):
         if isinstance(book, BooksModel):
@@ -73,19 +72,81 @@ class MovieModel:
         else:
             type_name = book.__class__.__name__
             raise TypeError("Unexpected type {0}".format(type_name))
-            
+
+class SongModel:
+    def __init__(self, youtubeId, image, artists, params = []):
+        self.song_id = params[0]
+        self.album_spotify_id = params[1]
+        self.artists_spotify_id = params[2]
+        self.duration = params[3]
+        self.title = params[4]
+        self.song_spotify_id = params[5]
+        self.spotify_link = params[6]
+        self.song_img = image
+        self.ytId = youtubeId
+        self.artists = artists
+
+    def to_dict(song):
+        if isinstance(song, SongModel):
+            dict = {
+                "song_id": song.song_id,
+                "album_spotify_id": song.album_spotify_id,
+                "artists_spotify_id": song.artists_spotify_id,
+                "title": song.title,
+                "song_spotify_id": song.song_spotify_id,
+                "spotify_link": song.spotify_link,
+                "youtube_id": song.ytId,
+                "image": song.song_img,
+                "artists": song.artists
+            }
+            return dict
+        else:
+            type_name = song.__class__.__name__
+            raise TypeError("Unexpected type {0}".format(type_name))
+
+
+class SongArtistModel:
+    def __init__(self, params = []):
+        self.artist_name = params[0]
+        self.artist_spotify_id = params[1]
+        self.image = params[2]
+        self.followers = params[3]
+        self.popularity = params[4]
+        self.spotify_profile = params[5]
+
+    def to_dict(artist):
+        if isinstance(artist, SongArtistModel):
+            dict = {
+                "artist_name": artist.artist_name,
+                "artist_spotify_id": artist.artist_spotify_id,
+                "image": artist.image,
+                "followers": artist.followers,
+                "spotify_profile": artist.spotify_profile,
+            }
+            return dict
+        else:
+            type_name = artist.__class__.__name__
+            raise TypeError("Unexpected type {0}".format(type_name))
+
+
+
+
+
+
 class MediaItemPartialModel:
-    def __init__(self, id, name, image):
+    def __init__(self, id, name, image, type):
         self.id = id
         self.name = name
         self.image = image
+        self.type = type
 
     def to_dict(item):
         if isinstance(item, MediaItemPartialModel):
             return {
                 "item_id": item.id,
                 "item_name": item.name,
-                "image": item.image
+                "image": item.image,
+                "type": item.type
             }
         else:
             type_name = item.__class__.__name__
@@ -106,5 +167,3 @@ class SectionModel:
         else:
             type_name = section.__class__.__name__
             raise TypeError("Unexpected type {0}".format(type_name))
-
-
