@@ -278,7 +278,7 @@ class MusicManager():
         else:
             playingtime=playing_times[0][0] + 1
             # playing_times[0][0] =
-            cur.execute('''UPDATE user_song_listening SET values(?,?,?)''', [userId,songId,playingtime])
+            cur.execute('''UPDATE user_song_listening SET (?,?,?)''', [userId,songId,playingtime])
             con.close()
 
         return
