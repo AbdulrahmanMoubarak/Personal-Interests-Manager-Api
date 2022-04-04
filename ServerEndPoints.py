@@ -133,7 +133,7 @@ def incrementplayingtime():
     param_songId=request.args.get('song_id')
     param_playingTimes=request.args.get('playing_times')
     if param_userId != None and param_songId != None and param_playingTimes != None:
-        musicManager.addsonglistening  (int(param_userId), int(param_songId), float(param_playingTimes))
+        musicManager.addsonglistening  (int(param_userId), int(param_songId))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=True, port=5001)
