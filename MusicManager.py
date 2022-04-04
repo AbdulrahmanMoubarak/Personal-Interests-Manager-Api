@@ -276,9 +276,9 @@ class MusicManager():
             cur.execute('''INSERT INTO user_song_listening values(?,?,?)''', [userId,songId,1] )
             con.close()
         else:
-            playingtime=playing_times[0][0] + 1
+            playingtime=playing_times[0][2] + 1
             # playing_times[0][0] =
-            cur.execute('''UPDATE user_song_listening SET (?,?,?)''', [userId,songId,playingtime])
+            cur.execute('''UPDATE user_song_listening SET (playingtime=?) WHERE user_id=(?) AND songId =(?)''', [userId,SongId])
             con.close()
 
         return
