@@ -11,6 +11,8 @@ from datetime import datetime, date
 from tmdbv3api import Trending
 from tmdbv3api import Movie
 from tmdbv3api import Discover
+from tmdbv3api import Collection
+from tmdbv3api import Company
 from random import shuffle
 
 tmdb = TMDb()
@@ -51,9 +53,59 @@ class MoviesManager:
         cast = self.__extractCastFromResponse(response)
         return json.dumps(cast, default=MediaItemPartialModel.to_dict)
 
+    def getMovieBasedRecommendation(self, movieId):
+        sec_list = []
+        tmdb_movie = Movie()
+        tmdb_collection = Collection()
+        tmdb_company = Company()
+
+        mDetails = tmdb_movie.details(movieId)
+        try:
+            movieCollection = mDetails['belongs_to_collection']['id']
+        except:
+            movieCollection = None
+
+
+        if movieCollection != None:
+            collectionResponse = self.__extractMoviesFromResponse(tmdb_collection.details(movieCollection)['parts'])
+            sameCollection = SectionModel("Movies From The Collection", collectionResponse)
+            sec_list.append(sameCollection)
+
+        similarMoviesResponse = self.__extractMoviesFromResponse(tmdb_movie.similar(movieId, page=randrange(1, 10)))
+        similarMovies = SectionModel("Similar Movies", similarMoviesResponse)
+        sec_list.append(similarMovies)
+
+        movieGenre = mDetails['genres'][randrange(0,len(mDetails['genres']) - 1)]
+        similarMovieGenreResponse = self.__getRandomGenreMoviesFromTmdb(movieGenre['id'])
+        similarByGenre = SectionModel("Popular "+ movieGenre['name'] +" Movies", similarMovieGenreResponse)
+        sec_list.append(similarByGenre)
+
+        if len(mDetails['production_companies']) > 1:
+            movieCompany = mDetails['production_companies'][randrange(0,len(mDetails['production_companies']) -1)]
+        else:
+            movieCompany = mDetails['production_companies'][0]
+
+        similarCompanyResponse = self.__extractMoviesFromResponse(tmdb_company.movies(movieCompany['id']))
+        similarByComp = SectionModel("Also From " + movieCompany['name'], similarCompanyResponse)
+        sec_list.append(similarByComp)
+
+        return json.dumps(sec_list, default=SectionModel.to_dict)
+
+
+    def __extractMoviesFromResponse(self, response):
+        mList = []
+        for movie in response:
+            mId = movie['id']
+            mTitle = movie['title']
+            mPoster = movie['poster_path']
+            mList.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(mId, mTitle, mPoster, "movie")))
+        return mList
+
     def __extractCastFromResponse(self, response):
         cList = []
+        i = 0
         for castMember in response['cast']:
+
             cImage = castMember['profile_path']
             cName = castMember['name']
             cChar = castMember['character']
@@ -80,22 +132,8 @@ class MoviesManager:
         return json.dumps(secList, default=SectionModel.to_dict)
 
     def findMovieByName(self, name):
-        mList = []
-        movieList = self.__findSimilarMoviesInDbByName("%" + name + "%")
-        for movie in movieList:
-            mId = movie[0]
-            mTitle = movie[1]
-            mPoster = movie[2]
-            mList.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(mId, mTitle, mPoster, "movie")))
-
         tmdb_movieList = self.__tmdbSearchForMovie(name)
-
-        mySearchSec = SectionModel("Search Results", mList)
-        tmdbSearchSec = SectionModel("Results From TMDB", tmdb_movieList)
-
-        secList = [mySearchSec, tmdbSearchSec]
-
-        return json.dumps(secList, default=SectionModel.to_dict)
+        return json.dumps(tmdb_movieList, default=MediaItemPartialModel.to_dict)
 
     def findMovieById(self, id):
         id = int(id)
@@ -296,5 +334,3 @@ class MoviesManager:
                 mTrailer,
                 mBackground
                 ]
-
-
