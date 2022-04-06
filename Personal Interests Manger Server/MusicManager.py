@@ -10,6 +10,8 @@ from ProjectModels import SongArtistModel
 from ProjectModels import MediaItemPartialModel
 from ProjectModels import SectionModel
 import urllib.request
+import urllib.parse
+from urllib.request import Request
 from bs4 import BeautifulSoup
 import re
 from random import shuffle
@@ -77,6 +79,10 @@ class MusicManager():
         else:
             return json.dumps(self.__findSpotifySongById(songSpotifyId), default=SongModel.to_dict)
 
+    def searchForSong(self, query):
+        spotifyResList = self.__searchInSpotify(query)
+        return json.dumps(spotifyResList, default=MediaItemPartialModel.to_dict)
+
     def __findSpotifySongById(self, songSpotifyId):
         track = sp.track(track_id=songSpotifyId)
         tName = track['name']
@@ -89,10 +95,13 @@ class MusicManager():
         for artist in track['artists']:
             tArtists += artist['id'] + ","
             artList.append(artist['id'])
+
         try:
-            songYtId = self.__findSongYoutubeId(tName, track['artists'][0]['name'])
+            songYtId = self.__findSongYoutubeId2(songName=tName, artistName=track['artists'][0]['name'])
         except:
             songYtId = ""
+
+        print(songYtId)
 
         artists = self.__findSongArtistsData(artList)
         return SongModel(songYtId, tAlbumImg, artists,
@@ -115,6 +124,27 @@ class MusicManager():
             html = response.read()
             soup = BeautifulSoup(html, 'html.parser')
             ytID = soup.find('li', class_='playing')['yt']
+            return ytID
+
+    def __findSongYoutubeId2(self, songName="", artistName=""):
+        artistName = artistName.replace(' ', '-').lower()
+        songName = re.sub("['?}{:.;!@#%^&*(,)]", '', str(songName)).lower()
+        urlSongName = ""
+        i = 0
+        for word in songName.split(' '):
+            if i == 4:
+                break
+            urlSongName += word
+            if i != 3 and i != len(songName.split(' ')) - 1:
+                urlSongName += "-"
+            i += 1
+        urlParams = urllib.parse.quote_plus(artistName + "-" + urlSongName)
+        song_url = "https://watch.sm3na.org/"+urlParams+"/"
+        print(song_url)
+        with urllib.request.urlopen(Request(song_url, headers={'User-Agent': 'Mozilla/5.0'})) as response:
+            html = response.read()
+            soup = BeautifulSoup(html, 'html.parser')
+            ytID = soup.find('input', id='videoId1')['value']
             return ytID
 
     def __findSongArtistsData(self, artistList):
@@ -261,8 +291,38 @@ class MusicManager():
         userSongs = cur.execute('''SELECT song_id FROM user_song_listening WHERE user_id = (?)''',
                                 [userId]).fetchall()
 
+        randIdx = []
+        while len(randIdx) < 5:
+            randNum = randrange(0, len(userSongs) - 1)
+            if randNum not in randIdx:
+                randIdx.append(randNum)
+
         idList = []
-        for songId in userSongs:
-            idList.append(songId[0])
+        for songIdx in randIdx:
+            idList.append(userSongs[songIdx][0])
         tracks = sp.recommendations(seed_tracks=idList)
         return self.__extractSpotifyRecommendationResponse(tracks)
+
+    def __searchInSpotify(self, query):
+        resList = []
+        res = sp.search(query, limit=50, offset=0, type= "track,artist")
+        for song in res["tracks"]["items"]:
+            tId = song["id"]
+            tName = song["name"]
+            try:
+                tAlbumImg = song['album']['images'][0]['url']
+            except:
+                tAlbumImg = ""
+            type = "song"
+            resList.append(MediaItemPartialModel(tId, tName, tAlbumImg, type))
+
+        for artist in res["artists"]["items"]:
+            aId = artist['id']
+            aName = artist['name']
+            try:
+                aImage = artist['images'][0]['url']
+            except:
+                aImage = ""
+            aType = "artist"
+            resList.append(MediaItemPartialModel(aId, aName, aImage, aType))
+        return resList
