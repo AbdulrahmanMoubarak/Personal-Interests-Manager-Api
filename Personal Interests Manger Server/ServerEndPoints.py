@@ -5,7 +5,6 @@ from MusicManager import MusicManager as musicManager
 
 app = Flask(__name__)
 
-
 @app.route("/movies/search", methods=['GET'])
 def searchForMovie():
     search_query_genre = request.args.get('genre')
@@ -52,6 +51,13 @@ def getMovieCredits():
         response = movieManager().findMovieCast(param_movieId)
         return response
 
+@app.route("/movies/movie-based-recommendation", methods=['GET'])
+def getMovieBasedRecommendation():
+    param_movieId = request.args.get('movieId')
+    if param_movieId != None:
+        response = movieManager().getMovieBasedRecommendation(param_movieId)
+        return response
+
 
 
 @app.route("/books/search", methods=['GET'])  #Done
@@ -96,6 +102,8 @@ def searchForSong():
     search_query_id = request.args.get('id')
     if search_query_id != None:
         return musicManager().findSongById(search_query_id)
+    elif search_query != None:
+        return musicManager().searchForSong(search_query)
     return
 
 @app.route("/music/main", methods=['GET'])
@@ -110,3 +118,4 @@ def getSongsMainScreen():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=True, port=5001)
+
