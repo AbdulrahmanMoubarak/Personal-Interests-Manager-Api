@@ -1,5 +1,4 @@
 from concurrent.futures.thread import ThreadPoolExecutor
-
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from SpotifyCredintials import Credintials as spcred
@@ -31,6 +30,7 @@ class MusicManager():
     def getHomePageSongs(self, userId):
         with ThreadPoolExecutor(max_workers=7) as executor:
             resList = []
+            resListOrdered=[]
             userArtistrec = executor.submit(self.__getUserArtistSongsSpotifyRecommendation, userId)
             userGenreRecs = executor.submit(self.__getUserGenreSongsSpotifyRecommendation, userId)
             spotifyNewReleases = executor.submit(self.__getSpotifyNewReleases)
@@ -43,7 +43,7 @@ class MusicManager():
             resList.append(songBasedRec)
 
             userSongs = SectionModel("Quick Picks", userPlayedSongs.result())
-            resList.append(userSongs)
+            resListOrdered.append(userSongs)
 
             artistSongs = SectionModel("Songs From Your Favourite Artists", userArtistTopSongs.result())
             resList.append(artistSongs)
@@ -61,7 +61,7 @@ class MusicManager():
 
             shuffle(resList)
 
-            return json.dumps(resList, default=SectionModel.to_dict)
+            return json.dumps(resListOrdered + resList, default=SectionModel.to_dict)
 
     def findSongById(self, songSpotifyId):
         con = self.__connectToDB()
@@ -82,6 +82,23 @@ class MusicManager():
     def searchForSong(self, query):
         spotifyResList = self.__searchInSpotify(query)
         return json.dumps(spotifyResList, default=MediaItemPartialModel.to_dict)
+
+    def addsonglistening(self, userId, songId):
+        con = self.__connectToDB()
+        cur = con.cursor()
+        try:
+            playing_times = cur.execute('''SELECT playing_times FROM user_song_listening WHERE user_id = (?) AND song_id = 
+            (?) ''', [userId, songId]).fetchall()
+            if len(playing_times) == 0:
+                cur.execute('''INSERT INTO user_song_listening values(?,?,?)''', [userId, songId, 1])
+            else:
+                playingtime = playing_times[0][0] + 1
+                cur.execute('''UPDATE user_song_listening SET playing_times = (?) WHERE user_id = (?) ''', [playingtime, userId])
+            con.commit()
+            con.close()
+            return True
+        except:
+            return False
 
     def __findSpotifySongById(self, songSpotifyId):
         track = sp.track(track_id=songSpotifyId)
@@ -128,7 +145,7 @@ class MusicManager():
 
     def __findSongYoutubeId2(self, songName="", artistName=""):
         artistName = artistName.replace(' ', '-').lower()
-        songName = re.sub("['?}{:.;!@#%^&*(,)]", '', str(songName)).lower()
+        songName = songName.replace(' ', '-').lower()
         urlSongName = ""
         i = 0
         for word in songName.split(' '):
@@ -138,14 +155,45 @@ class MusicManager():
             if i != 3 and i != len(songName.split(' ')) - 1:
                 urlSongName += "-"
             i += 1
-        urlParams = urllib.parse.quote_plus(artistName + "-" + urlSongName)
-        song_url = "https://watch.sm3na.org/"+urlParams+"/"
+        urlParams = urllib.parse.quote_plus(artistName + "-" + urlSongName + "-" + "song")
+        song_url = "https://watch.sm3na.org/" + urlParams + "/"
         print(song_url)
         with urllib.request.urlopen(Request(song_url, headers={'User-Agent': 'Mozilla/5.0'})) as response:
             html = response.read()
             soup = BeautifulSoup(html, 'html.parser')
             ytID = soup.find('input', id='videoId1')['value']
             return ytID
+
+    def getSongBasedRecommendation(self, trackId):
+        secList = []
+        retTrackRec = sp.recommendations(seed_tracks=[trackId])
+        secList.append(SectionModel("You May Also Like", self.__extractSpotifyRecommendationResponse(retTrackRec)))
+
+        track = sp.track(track_id=trackId)
+        artList = []
+        for artist in track['artists']:
+            artList.append(artist['id'])
+        aData = self.__findSongArtistsData(artList)
+
+        seclist2 = self.__getAllArtistsRecommendation(aData)
+
+        return json.dumps(secList + seclist2, default=SectionModel.to_dict)
+
+    def __getAllArtistsRecommendation(self, artistList):
+        secList = []
+        for artist in artistList:
+            res = sp.artist_top_tracks(artist['artist_spotify_id'])
+            secList.append(
+                SectionModel(artist['artist_name'] + " Top Songs", self.__extractSpotifyRecommendationResponse(res)))
+
+        if len(artistList) > 1:
+            randIdx = randrange(0, len(artistList) - 1)
+        else:
+            randIdx = 0
+        simArtistsRes = sp.artist_related_artists(artistList[randIdx]['artist_spotify_id'])
+        secList.append(SectionModel("Artists Like " + artistList[randIdx]['artist_name'],
+                                    self.__extractSpotifyArtistResponse(simArtistsRes)))
+        return secList
 
     def __findSongArtistsData(self, artistList):
         alist = []
@@ -275,7 +323,7 @@ class MusicManager():
     def __getUserPlayedSongs(self, userId):
         con = self.__connectToDB()
         cur = con.cursor()
-        userSongs = cur.execute('''SELECT song_id FROM user_song_listening WHERE user_id = (?)''',
+        userSongs = cur.execute('''SELECT song_id FROM user_song_listening WHERE user_id = (?) AND playing_times > 2''',
                                 [userId]).fetchall()
 
         idList = []
@@ -305,7 +353,7 @@ class MusicManager():
 
     def __searchInSpotify(self, query):
         resList = []
-        res = sp.search(query, limit=50, offset=0, type= "track,artist")
+        res = sp.search(query, limit=50, offset=0, type="track,artist")
         for song in res["tracks"]["items"]:
             tId = song["id"]
             tName = song["name"]
