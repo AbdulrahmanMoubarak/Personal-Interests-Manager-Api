@@ -75,7 +75,11 @@ class MoviesManager:
         similarMovies = SectionModel("Similar Movies", similarMoviesResponse)
         sec_list.append(similarMovies)
 
-        movieGenre = mDetails['genres'][randrange(0,len(mDetails['genres']) - 1)]
+        if(len(mDetails['genres']) > 1):
+            randNum = randrange(0,len(mDetails['genres']) - 1)
+        else:
+            randNum = 0
+        movieGenre = mDetails['genres'][randNum]
         similarMovieGenreResponse = self.__getRandomGenreMoviesFromTmdb(movieGenre['id'])
         similarByGenre = SectionModel("Popular "+ movieGenre['name'] +" Movies", similarMovieGenreResponse)
         sec_list.append(similarByGenre)
@@ -91,6 +95,18 @@ class MoviesManager:
 
         return json.dumps(sec_list, default=SectionModel.to_dict)
 
+
+    def addMovieRatingToDb(self, movieId, userId, rating):
+        con = self.__connectToDB()
+        cur = con.cursor()
+        try:
+            cur.execute('''INSERT INTO movie_rating VALUES (?,?,?)''', [userId, movieId, rating])
+            con.commit()
+            con.close()
+            return True
+        except:
+            con.close()
+            return False
 
     def __extractMoviesFromResponse(self, response):
         mList = []
@@ -135,17 +151,25 @@ class MoviesManager:
         tmdb_movieList = self.__tmdbSearchForMovie(name)
         return json.dumps(tmdb_movieList, default=MediaItemPartialModel.to_dict)
 
-    def findMovieById(self, id):
+    def findMovieById(self, id, userId):
         id = int(id)
+
         con = self.__connectToDB()
         cur = con.cursor()
         cur.execute('''SELECT * FROM movies_metadata WHERE movie_id = (?)''', [id])
         result = cur.fetchall()
+
+        try:
+            user_rating = cur.execute(''' SELECT rating FROM movie_rating WHERE user_id = (?) AND movie_id = (?)''', [userId, id]).fetchall()[0][0]
+        except:
+            user_rating = -1.0
         con.close()
         if len(result) == 0:
-            return json.dumps(self.__tmdbGetMovieById(id), default=MovieModel.to_dict)
+            return json.dumps(self.__tmdbGetMovieById(id, user_rating), default=MovieModel.to_dict)
         else:
-            return json.dumps(MovieModel(result[0]), default=MovieModel.to_dict)
+            mMovie = MovieModel(result[0])
+            mMovie.user_rating = user_rating
+            return json.dumps(mMovie, default=MovieModel.to_dict)
 
     def __findSimilarMoviesInDbByName(self, movie):
         con = self.__connectToDB()
@@ -167,14 +191,6 @@ class MoviesManager:
         con.close()
         return result
 
-    def addMovieRatingToDb(self, movieId, userId, rating):
-        con = self.__connectToDB()
-        cur = con.cursor()
-        timestamp = datetime.now().timestamp()
-        cur.execute('''INSERT INTO movie_rating VALUES (?,?,?,?)''', [userId, movieId, rating, timestamp])
-        con.close()
-        return
-
     def __tmdbSearchForMovie(self, query=""):
         tmdb_movies = Movie()
         results = tmdb_movies.search(query)
@@ -186,12 +202,14 @@ class MoviesManager:
             mList.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(mId, mTitle, mPoster, "movie")))
         return mList
 
-    def __tmdbGetMovieById(self, mId):
+    def __tmdbGetMovieById(self, mId, user_rating):
         try:
             mDetails = Movie().details(mId)
         except:
             return
-        return MovieModel(self.__processTMDBMovieDetails(mDetails))
+        mMovie = MovieModel(self.__processTMDBMovieDetails(mDetails))
+        mMovie.user_rating = user_rating
+        return mMovie
 
     def recommendMoviesByUserId(self):
         return
