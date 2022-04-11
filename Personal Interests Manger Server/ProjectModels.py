@@ -19,6 +19,7 @@ class MovieModel:
         self.year = params[16]
         self.trailer = params[17]
         self.background = params[18]
+        self.user_rating = -1
 
     def to_dict(movie):
         if isinstance(movie, MovieModel):
@@ -40,7 +41,8 @@ class MovieModel:
                 "vote_count": movie.vote_count,
                 "imdb_id": movie.imdb_id,
                 "trailer": movie.trailer,
-                "background": movie.background
+                "background": movie.background,
+                "user_rating": movie.user_rating
             }
             return dict
         else:
