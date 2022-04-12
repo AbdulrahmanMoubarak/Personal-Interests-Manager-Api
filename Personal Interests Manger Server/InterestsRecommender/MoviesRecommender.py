@@ -4,6 +4,8 @@ import threadpoolctl
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 import sqlite3
+from random import shuffle
+
 
 
 class MovieRecommender:
@@ -13,9 +15,10 @@ class MovieRecommender:
         df2 = pd.read_sql_query("""Select movie_id from movie_rating where user_id=""" + str(userId), conn)
         merged = pd.merge(df, df2)
         for movie_id in merged['movie_id'].values:
-            self.Contentbased(movie_id, df)
+            self.Contentbased(movie_id, df, conn)
 
     def CollabWithUserId(self, userId, conn):
+
         df = pd.read_sql_query("""Select movie_id , title from movies_metadata""", conn)
         df2 = pd.read_sql_query("""Select movie_id,rating from movie_rating where user_id=""" + str(userId), conn)
         df3 = pd.read_sql_query("""Select user_id,movie_id,rating from movie_rating""", conn)
@@ -24,7 +27,8 @@ class MovieRecommender:
         df3['movie_id'] = df3['movie_id'].astype(str)
         merged = pd.merge(df, df2)
         merged2 = pd.merge(df, df3)
-        return self.CollabBased(merged, merged2)
+        res = self.CollabBased(merged, merged2)
+        return self.__extractRecommendationFromDataframe(res)
 
     def Contentbased(self, movieid, df, conn):
         id = movieid
@@ -99,8 +103,8 @@ class MovieRecommender:
             similar_movie = similar_movie.append(self.__recommend_movie(row["movie_id"], row["rating"], movie_similarity), ignore_index=True)
 
         # similar_movie.sum().sort_values(ascending=False)
-
-        return similar_movie.sum().sort_values(ascending=False)
+        retList = similar_movie.sum().sort_values(ascending=False).to_frame()
+        return retList
 
         # function for getting recommendation
     def __recommend_movie(self, movie_id, user_rating, movie_similarity):
@@ -108,3 +112,16 @@ class MovieRecommender:
             movie_score = movie_similarity[movie_id] * (user_rating - 2.5)
             movie_score = movie_score.sort_values(ascending=False)
             return movie_score
+
+    def __extractRecommendationFromDataframe(self, resDf):
+        dfDict = resDf.to_dict()
+        mList = []
+        for movie in dfDict[0]:
+            if dfDict[0][movie] > 4:
+                mList.append(movie)
+        print(len(mList))
+        shuffle(mList)
+        try:
+            return mList[:20]
+        except:
+            return mList
