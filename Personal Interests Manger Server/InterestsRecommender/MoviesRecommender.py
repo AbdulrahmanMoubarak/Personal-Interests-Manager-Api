@@ -9,6 +9,11 @@ from random import shuffle
 
 
 class MovieRecommender:
+     def ContentWithMovieId(self,MovieId):
+        df = pd.read_sql_query("""Select genres,movie_id from movies_metadata""", conn)
+        pp=pd.Series()
+        pp=pp.append(self.Contentbased(MovieId, df))
+        return pp.tolist()
 
     def ContentWithUserId(self, userId, conn):
         df = pd.read_sql_query("""Select genres,movie_id from movies_metadata""", conn)
