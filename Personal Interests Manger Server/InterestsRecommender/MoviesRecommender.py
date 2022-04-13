@@ -14,6 +14,17 @@ class MovieRecommender:
         pp=pd.Series()
         pp=pp.append(self.Contentbased(MovieId, df))
         return pp.tolist()
+     
+     def CollabWithMovieId(self,userId,MovieId):
+        df = pd.read_sql_query("""Select movie_id , title from movies_metadata""", conn)
+        df2 = pd.read_sql_query("""Select movie_id,rating from movie_rating where user_id=""" + str(userId)+ """ and movie_id =""" +str(MovieId), conn)
+        df3 = pd.read_sql_query("""Select user_id,movie_id,rating from movie_rating""", conn)
+        df['movie_id'] = df['movie_id'].astype(str)
+        df2['movie_id'] = df2['movie_id'].astype(str)
+        df3['movie_id'] = df3['movie_id'].astype(str)
+        #merged = pd.merge(df, df2)
+        merged2 = pd.merge(df, df3)
+        return self.CollabBased(df2, merged2)
 
     def ContentWithUserId(self, userId, conn):
         df = pd.read_sql_query("""Select genres,movie_id from movies_metadata""", conn)
