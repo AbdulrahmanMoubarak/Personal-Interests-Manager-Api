@@ -122,16 +122,25 @@ class MovieRecommender:
         v = chunk['movie_id'].iloc[movie_indices]
         # Return the top 10 most similar movies
         return v
+    
+    def MatrixGenerator(self,merged2):
+
+        try:
+            movie_similarity = pd.read_csv("similarity.csv")
+        except:
+            user_rating = merged2.pivot_table(index='user_id', columns='movie_id', values='rating')
+
+            # replace the Na values with 0
+            user_rating = user_rating.fillna(0)
+
+            # apply pearson rule for standaralization
+            movie_similarity = user_rating.corr(method='pearson')
+            movie_similarity.to_csv("similarity.csv")
+        return movie_similarity
 
     def CollabBased(self, merged, merged2):
         # make table where the index is userId and coloums is Book title and the values are rating
-        user_rating = merged2.pivot_table(index='user_id', columns='movie_id', values='rating')
-
-        # replace the Na values with 0
-        user_rating = user_rating.fillna(0)
-
-        # apply pearson rule for standaralization
-        movie_similarity = user_rating.corr(method='pearson')
+        movie_similarity=self.MatrixGenerator(merged2)
 
         similar_movie = pd.DataFrame()
 
