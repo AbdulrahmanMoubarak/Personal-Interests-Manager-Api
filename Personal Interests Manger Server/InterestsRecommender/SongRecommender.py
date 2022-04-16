@@ -11,13 +11,13 @@ class Song:
         return self.ContentBased(df,df2)
 
     def ContentBased(self,df,df2):
-        df["sum"]=df["danceability"]+df["energy"]+df["loudness"]+df["tempo"]
-        df2["sum"]=df2["danceability"]+df2["energy"]+df2["loudness"]+df2["tempo"]
-        df["sum"]=df["sum"].astype(float)
-        df2["sum"]=df2["sum"].astype(float)
-        x=df2["sum"].values
-        df["sum"]=abs(df["sum"]-x)
-        df=df.sort_values(by="sum", ascending=True)
+        df=abs(df)
+        df2=abs(df2)
+        df["tempo"]=abs(df["tempo"]-df2["tempo"].values)
+        df["energy"]=abs(df["energy"]-df2["energy"].values)
+        df["danceability"]=abs(df["danceability"]-df2["danceability"].values)
+        df["loudness"]=abs(df["loudness"]-df2["loudness"].values)
+        df=df.sort_values(by=["tempo","energy","danceability","loudness"], ascending=True)
         return df['song_id']
 
 
