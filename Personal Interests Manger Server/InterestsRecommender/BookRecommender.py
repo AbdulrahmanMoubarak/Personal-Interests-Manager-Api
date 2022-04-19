@@ -8,12 +8,12 @@ import sqlite3
 conn = sqlite3.connect("pim_database.db")
 
 
-class Book:
+class BookRecommender:
     def ContentWithUserId(self,userId):
         df = pd.read_sql_query("""Select book_title,isbn from books_metadata""", conn)
         df2 = pd.read_sql_query("""Select isbn from book_rating where user_id=""" + str(userId), conn)
         merged = pd.merge(df, df2)
-        start = 0;
+        start = 0
         pp = pd.Series()
         for Book_id in merged['isbn'].values:
             if start == 0:
@@ -88,7 +88,3 @@ class Book:
 
         # Return the top 10 most similar movies
         return chunk['book_title'].iloc[Book_indices]
-
-
-r=Book()
-print (r.ContentWithUserId(276729))
