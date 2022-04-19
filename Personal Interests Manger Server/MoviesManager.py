@@ -1,7 +1,8 @@
 import sqlite3
 import json
 from random import randrange
-
+from concurrent.futures.thread import ThreadPoolExecutor
+from InterestsRecommender.MoviesRecommender import MovieRecommender
 from tmdbv3api import TMDb
 from TMDBCredentials import TmdbCredentials
 from ProjectModels import MovieModel
@@ -14,11 +15,13 @@ from tmdbv3api import Discover
 from tmdbv3api import Collection
 from tmdbv3api import Company
 from random import shuffle
+import asyncio
 
 tmdb = TMDb()
 tmdb.language = 'en'
 tmdb.debug = True
 tmdb.api_key = TmdbCredentials.API_KEY
+
 
 class MoviesManager:
     def __connectToDB(self):
@@ -26,26 +29,49 @@ class MoviesManager:
             "D:/FCIS SWE 2021/Graduation Project/Project source code/Dataset Migration/pim_database.db")
         return con
 
-    def getHomePageMovies(self, userId):
-        randomYear = randrange(1975, int(date.today().year))
+    async def getHomePageMovies(self, userId):
+        randomYear = randrange(2000, int(date.today().year))
         randomGenre = self.__getRandomGenre()
 
-        tmdbTrendingDay = self.__getDayTrendingMovies()
-        tmdbTrendingWeek = self.__getWeekTrendingMovies()
-        tmdbDiscoverYear = self.__getMoviesFromTmdbDiscover(randomYear)
-        tmdbDiscoverGenre = self.__getRandomGenreMoviesFromTmdb(randomGenre[0])
-        tmdbUpcoming = self.__getUpcomingMovies()
-        tmdbTopRated = self.__getRandomTopRatedMovies()
+        secList = []
 
-        trendinDay = SectionModel("Trending Today", tmdbTrendingDay)
-        trendinWeek = SectionModel("Trending This Week", tmdbTrendingWeek)
-        yearMovies = SectionModel("Popular in " + str(randomYear), tmdbDiscoverYear)
-        genreMovies = SectionModel("Popular " + randomGenre[1] + " Movies", tmdbDiscoverGenre)
-        upcomingMovies = SectionModel("Upcoming Movies", tmdbUpcoming)
-        topMovies = SectionModel("Of Top Rated Movies", tmdbTopRated)
-        secList = [trendinDay, trendinWeek, topMovies, yearMovies, genreMovies, upcomingMovies]
-        shuffle(secList)
-        return json.dumps(secList, default=SectionModel.to_dict)
+        with ThreadPoolExecutor(max_workers=8) as executor:
+
+            localCollabRecommend = executor.submit(self.__getCollabLocalRecommendation,userId)
+            localContentRecommend = executor.submit(self.__getContentLocalRecommendation, userId)
+            tmdbTrendingDay = executor.submit(self.__getDayTrendingMovies)
+            tmdbTrendingWeek = executor.submit(self.__getWeekTrendingMovies)
+            tmdbDiscoverYear = executor.submit(self.__getMoviesFromTmdbDiscover, randomYear)
+            tmdbDiscoverGenre = executor.submit(self.__getRandomGenreMoviesFromTmdb, randomGenre[0])
+            tmdbUpcoming = executor.submit(self.__getUpcomingMovies)
+            tmdbTopRated = executor.submit(self.__getRandomTopRatedMovies)
+
+            trendinDay = SectionModel("Trending Today", tmdbTrendingDay.result())
+            secList.append(trendinDay)
+            trendinWeek = SectionModel("Trending This Week", tmdbTrendingWeek.result())
+            secList.append(trendinWeek)
+            upcomingMovies = SectionModel("Upcoming Movies", tmdbUpcoming.result())
+            secList.append(upcomingMovies)
+            genreMovies = SectionModel("Popular " + randomGenre[1] + " Movies", tmdbDiscoverGenre.result())
+            secList.append(genreMovies)
+            yearMovies = SectionModel("Popular Movies in " + str(randomYear), tmdbDiscoverYear.result())
+            secList.append(yearMovies)
+            topMovies = SectionModel("Top Rated Movies", tmdbTopRated.result())
+            secList.append(topMovies)
+
+            localCollabRes = localCollabRecommend.result()
+            localCollabRec = SectionModel("People Like You Also Viewed", localCollabRes)
+
+            localContentRes = localContentRecommend.result()
+            localContentRec = SectionModel("Hobbitor Recommendation", localContentRes)
+
+            if (len(localContentRes) > 5):
+                secList.append(localContentRec)
+
+            if (len(localCollabRes) > 5):
+                secList.append(localCollabRec)
+
+            return json.dumps(secList, default=SectionModel.to_dict)
 
     def findMovieCast(self, movieId):
         tmdb_movie = Movie()
@@ -53,18 +79,21 @@ class MoviesManager:
         cast = self.__extractCastFromResponse(response)
         return json.dumps(cast, default=MediaItemPartialModel.to_dict)
 
-    def getMovieBasedRecommendation(self, movieId):
+    def getMovieBasedRecommendation(self, movieId, userId):
         sec_list = []
         tmdb_movie = Movie()
         tmdb_collection = Collection()
         tmdb_company = Company()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            peopleRecommendation = executor.submit(self.__getMovieBasedLocalCollabRecommendation, movieId, userId)
+            contentRecommendation = executor.submit(self.__getMovieBasedLocalContentRecommendation, movieId)
 
         mDetails = tmdb_movie.details(movieId)
         try:
             movieCollection = mDetails['belongs_to_collection']['id']
         except:
             movieCollection = None
-
 
         if movieCollection != None:
             collectionResponse = self.__extractMoviesFromResponse(tmdb_collection.details(movieCollection)['parts'])
@@ -75,17 +104,17 @@ class MoviesManager:
         similarMovies = SectionModel("Similar Movies", similarMoviesResponse)
         sec_list.append(similarMovies)
 
-        if(len(mDetails['genres']) > 1):
-            randNum = randrange(0,len(mDetails['genres']) - 1)
+        if (len(mDetails['genres']) > 1):
+            randNum = randrange(0, len(mDetails['genres']) - 1)
         else:
             randNum = 0
         movieGenre = mDetails['genres'][randNum]
         similarMovieGenreResponse = self.__getRandomGenreMoviesFromTmdb(movieGenre['id'])
-        similarByGenre = SectionModel("Popular "+ movieGenre['name'] +" Movies", similarMovieGenreResponse)
+        similarByGenre = SectionModel("Popular " + movieGenre['name'] + " Movies", similarMovieGenreResponse)
         sec_list.append(similarByGenre)
 
         if len(mDetails['production_companies']) > 1:
-            movieCompany = mDetails['production_companies'][randrange(0,len(mDetails['production_companies']) -1)]
+            movieCompany = mDetails['production_companies'][randrange(0, len(mDetails['production_companies']) - 1)]
         else:
             movieCompany = mDetails['production_companies'][0]
 
@@ -93,12 +122,28 @@ class MoviesManager:
         similarByComp = SectionModel("Also From " + movieCompany['name'], similarCompanyResponse)
         sec_list.append(similarByComp)
 
-        return json.dumps(sec_list, default=SectionModel.to_dict)
+        collabRes = peopleRecommendation.result()
+        if len(collabRes) > 0:
+            peopleAlsoSec = SectionModel("People Who Liked This Also Liked", collabRes)
+            sec_list.append(peopleAlsoSec)
 
+        contentRes = contentRecommendation.result()
+        if (len(contentRes) > 0):
+            hobbitorRecSec = SectionModel("Recommended By Hobbitor", contentRes)
+            sec_list.append(hobbitorRecSec)
+
+        return json.dumps(sec_list, default=SectionModel.to_dict)
 
     def addMovieRatingToDb(self, movieId, userId, rating):
         con = self.__connectToDB()
         cur = con.cursor()
+
+        res = cur.execute('''SELECT * FROM movies_metadata WHERE movie_id = (?)''', [movieId]).fetchall()
+
+        if len(res) == 0:
+            mDetails = self.__processTMDBMovieDetails(Movie().details(movieId))
+            cur.execute('''INSERT INTO movies_metadata VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', mDetails)
+
         try:
             cur.execute('''INSERT INTO movie_rating VALUES (?,?,?)''', [userId, movieId, rating])
             con.commit()
@@ -107,6 +152,50 @@ class MoviesManager:
         except:
             con.close()
             return False
+
+    def __getCollabLocalRecommendation(self, userId):
+        conn = self.__connectToDB()
+        cur = conn.cursor()
+        idList = MovieRecommender().CollabWithUserId(userId, self.__connectToDB())
+        mList = []
+        for mId in idList:
+            rec = cur.execute(''' SELECT movie_id,title,poster FROM movies_metadata WHERE movie_id = (?)''',
+                              [mId]).fetchone()
+            mList.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(mId, rec[1], rec[2], "movie")))
+        return mList
+
+    def __getContentLocalRecommendation(self, userId):
+        con = self.__connectToDB()
+        cur = con.cursor()
+        idList = MovieRecommender().ContentWithUserId(userId, con, 3)
+        mList = []
+        for mId in idList:
+            rec = cur.execute(''' SELECT movie_id,title,poster FROM movies_metadata WHERE movie_id = (?)''',
+                              [mId]).fetchone()
+            mList.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(mId, rec[1], rec[2], "movie")))
+        return mList
+
+    def __getMovieBasedLocalCollabRecommendation(self, movieId, userId):
+        con = self.__connectToDB()
+        cur = con.cursor()
+        idList = MovieRecommender().CollabWithMovieId(userId, movieId, con)
+        mList = []
+        for mId in idList:
+            rec = cur.execute(''' SELECT movie_id,title,poster FROM movies_metadata WHERE movie_id = (?)''',
+                              [mId]).fetchone()
+            mList.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(mId, rec[1], rec[2], "movie")))
+        return mList
+
+    def __getMovieBasedLocalContentRecommendation(self, movieId):
+        con = self.__connectToDB()
+        cur = con.cursor()
+        idList = MovieRecommender().ContentWithMovieId(movieId, con, 6)
+        mList = []
+        for mId in idList:
+            rec = cur.execute(''' SELECT movie_id,title,poster FROM movies_metadata WHERE movie_id = (?)''',
+                              [mId]).fetchone()
+            mList.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(mId, rec[1], rec[2], "movie")))
+        return mList
 
     def __extractMoviesFromResponse(self, response):
         mList = []
@@ -121,14 +210,12 @@ class MoviesManager:
         cList = []
         i = 0
         for castMember in response['cast']:
-
             cImage = castMember['profile_path']
             cName = castMember['name']
             cChar = castMember['character']
             cList.append(MediaItemPartialModel(cChar, cName, cImage, type="cast_member"))
-            i+=1
+            i += 1
         return cList
-
 
     def findMovieByGenre(self, genre):
         mList = []
@@ -160,7 +247,8 @@ class MoviesManager:
         result = cur.fetchall()
 
         try:
-            user_rating = cur.execute(''' SELECT rating FROM movie_rating WHERE user_id = (?) AND movie_id = (?)''', [userId, id]).fetchall()[0][0]
+            user_rating = cur.execute(''' SELECT rating FROM movie_rating WHERE user_id = (?) AND movie_id = (?)''',
+                                      [userId, id]).fetchall()[0][0]
         except:
             user_rating = -1.0
         con.close()
@@ -210,9 +298,6 @@ class MoviesManager:
         mMovie = MovieModel(self.__processTMDBMovieDetails(mDetails))
         mMovie.user_rating = user_rating
         return mMovie
-
-    def recommendMoviesByUserId(self):
-        return
 
     def __getDayTrendingMovies(self):
         trending = Trending()
@@ -303,7 +388,6 @@ class MoviesManager:
                 continue
             mList.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(mId, mTitle, mPoster, "movie")))
         return mList
-
 
     def __processTMDBMovieDetails(self, mDetails):
         mId = mDetails['id']
