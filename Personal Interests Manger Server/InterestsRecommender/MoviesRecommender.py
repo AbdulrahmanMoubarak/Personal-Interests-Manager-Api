@@ -25,45 +25,39 @@ class MovieRecommender:
         if (len(userRating) == 0):
             return []
 
-        df = pd.read_sql_query("""Select movie_id , title from movies_metadata""", conn)
+
         df2 = pd.read_sql_query(
             """Select movie_id,rating from movie_rating where user_id=""" + str(userId) + """ AND movie_id =""" + str(
                 movieId), conn)
-        df3 = pd.read_sql_query("""Select user_id,movie_id,rating from movie_rating""", conn)
-        df['movie_id'] = df['movie_id'].astype(str)
+
         df2['movie_id'] = df2['movie_id'].astype(str)
-        df3['movie_id'] = df3['movie_id'].astype(str)
+
         # merged = pd.merge(df, df2)
-        merged2 = pd.merge(df, df3)
-        res = self.CollabBased(df2, merged2)
+        res = self.CollabBased(df2, conn)
         return self.__extractRecommendationFromCollabDataframe(res, 0)
 
     def ContentWithUserId(self, userId, conn, numMovies):
         userRating = conn.cursor().execute('''SELECT * FROM movie_rating WHERE user_id = (?)''',
                                            [userId]).fetchall()
-        if(len(userRating) == 0):
+        if (len(userRating) == 0):
             return []
         df = pd.read_sql_query("""Select genres,movie_id from movies_metadata""", conn)
-        df2 = pd.read_sql_query("""Select movie_id from movie_rating where user_id=""" + str(userId) + ''' AND rating > 2.5 ORDER BY RANDOM() LIMIT 5''', conn)
+        df2 = pd.read_sql_query("""Select movie_id from movie_rating where user_id=""" + str(
+            userId) + ''' AND rating > 2.5 ORDER BY RANDOM() LIMIT 5''', conn)
         merged = pd.merge(df, df2)
         pp = pd.Series()
         for movie_id in merged['movie_id'].values:
             pp = pp.append(self.Contentbased(movie_id, df, conn, numMovies))
         return self.__extractRecommendationFromContentDataFrame(pp)
 
-
     def CollabWithUserId(self, userId, conn):
-
         df = pd.read_sql_query("""Select movie_id , title from movies_metadata""", conn)
         df2 = pd.read_sql_query("""Select movie_id,rating from movie_rating where user_id=""" + str(userId), conn)
-        df3 = pd.read_sql_query("""Select user_id,movie_id,rating from movie_rating""", conn)
         df['movie_id'] = df['movie_id'].astype(str)
         df2['movie_id'] = df2['movie_id'].astype(str)
-        df3['movie_id'] = df3['movie_id'].astype(str)
         merged = pd.merge(df, df2)
-        merged2 = pd.merge(df, df3)
-        res = self.CollabBased(merged, merged2)
-        return self.__extractRecommendationFromCollabDataframe(res, 4)
+        res = self.CollabBased(merged, conn)
+        return self.__extractRecommendationFromCollabDataframe(res, 1)
 
     def Contentbased(self, movieid, df, conn, numMovies):
         id = movieid
@@ -122,12 +116,29 @@ class MovieRecommender:
         v = chunk['movie_id'].iloc[movie_indices]
         # Return the top 10 most similar movies
         return v
-    
-    def MatrixGenerator(self,merged2):
 
+    def MatrixGenerator(self,conn, generate=False):
         try:
-            movie_similarity = pd.read_csv("similarity.csv")
+            if not generate:
+                movie_similarity = pd.read_csv("similarity.csv").to_frame()
+            else:
+                df = pd.read_sql_query("""Select movie_id , title from movies_metadata""", conn)
+                df['movie_id'] = df['movie_id'].astype(str)
+                df3 = pd.read_sql_query("""Select user_id,movie_id,rating from movie_rating""", conn)
+                df3['movie_id'] = df3['movie_id'].astype(str)
+                merged2 = pd.merge(df, df3)
+                user_rating = merged2.pivot_table(index='user_id', columns='movie_id', values='rating')
+
+                # replace the Na values with 0
+                user_rating = user_rating.fillna(0)
+                # apply pearson rule for standaralization
+                movie_similarity = user_rating.corr(method='pearson')
         except:
+            df = pd.read_sql_query("""Select movie_id , title from movies_metadata""", conn)
+            df['movie_id'] = df['movie_id'].astype(str)
+            df3 = pd.read_sql_query("""Select user_id,movie_id,rating from movie_rating""", conn)
+            df3['movie_id'] = df3['movie_id'].astype(str)
+            merged2 = pd.merge(df, df3)
             user_rating = merged2.pivot_table(index='user_id', columns='movie_id', values='rating')
 
             # replace the Na values with 0
@@ -138,9 +149,9 @@ class MovieRecommender:
             movie_similarity.to_csv("similarity.csv")
         return movie_similarity
 
-    def CollabBased(self, merged, merged2):
+    def CollabBased(self, merged, conn):
         # make table where the index is userId and coloums is Book title and the values are rating
-        movie_similarity=self.MatrixGenerator(merged2)
+        movie_similarity = self.MatrixGenerator(conn)
 
         similar_movie = pd.DataFrame()
 
@@ -151,7 +162,6 @@ class MovieRecommender:
         # similar_movie.sum().sort_values(ascending=False)
         retList = similar_movie.sum().sort_values(ascending=False).to_frame()
         return retList
-
         # function for getting recommendation
 
     def __recommend_movie(self, movie_id, user_rating, movie_similarity):
