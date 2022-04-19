@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from MoviesManager import MoviesManager as movieManager
 from BooksManager import BooksManager as bookManager
 from MusicManager import MusicManager as musicManager
+import asyncio
+import threading
 
 app = Flask(__name__)
 
@@ -20,7 +22,7 @@ def searchForMovie():
         response = movieManager().findMovieById(search_query_id, param_userId)
         return response
 
-
+#526896
 @app.route("/movies/rate", methods=['POST'])
 def rateMovie():
     if (request.method == 'POST'):
@@ -37,11 +39,15 @@ def rateMovie():
 
 @app.route("/movies/main", methods=['GET'])
 def getMoviesMainScreen():
+
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    loop = asyncio.get_event_loop()
+
     param_userId = request.args.get('userId')
 
     if param_userId != None:
         uId = param_userId
-    response = movieManager().getHomePageMovies(param_userId)
+    response = loop.run_until_complete(movieManager().getHomePageMovies(param_userId))
     return response
 
 
@@ -56,47 +62,61 @@ def getMovieCredits():
 @app.route("/movies/movie-based-recommendation", methods=['GET'])
 def getMovieBasedRecommendation():
     param_movieId = request.args.get('movieId')
+    param_userId = request.args.get('userId')
     if param_movieId != None:
-        response = movieManager().getMovieBasedRecommendation(param_movieId)
+        response = movieManager().getMovieBasedRecommendation(param_movieId, param_userId)
         return response
 
 
 @app.route("/books/search", methods=['GET'])  # Done
 def searchForBook():
     search_query_id = request.args.get('id')
+    search_query = request.args.get('q')
+    param_user_id = request.args.get('userId')
     search_query_name = request.args.get('name')
     search_query_author = request.args.get('author')
     if search_query_author != None:
         return bookManager().findBookByAuthor(search_query_author)
     elif search_query_name != None:
         return bookManager().findBookByName(search_query_name)
-    elif search_query_id != None:
-        response = bookManager().findBookById(search_query_id)
-        return response
+    elif search_query_id != None and param_user_id != None:
+        return bookManager().findBookById(search_query_id, param_user_id)
+    elif search_query != None:
+        return bookManager().searchForBook(search_query)
 
 
-@app.route("/books/rate", methods=['POST', 'GET'])  # Done
+@app.route("/books/rate", methods=['POST'])  # Done
 def rateBook():
-    if (request.method == 'GET'):
-        param_userId = request.args.get('user_id')
-        param_bookId = request.args.get('isbn')
-        param_rating = request.args.get('rating')
-        if param_bookId != None and param_rating != None and param_userId != None:
-            bookManager().addBookRatingToDb(int(param_userId), str(param_bookId), float(param_rating))
-        return
-    elif (request.method == 'POST'):
-        param_userId = request.args.get('user_id')
-        param_bookId = request.args.get('isbn')
-        param_rating = request.args.get('rating')
-        if param_bookId != None and param_rating != None and param_userId != None:
-            bookManager().addBookRatingToDb(int(param_userId), str(param_bookId), float(param_rating))
-        return
+    if (request.method == 'POST'):
+        param_userId = request.form.get('userId')
+        param_bookId = request.form.get('bookId')
+        param_bookName = request.form.get('bookName')
+        param_rating = request.form.get('rating')
+        if param_bookId != None and param_rating != None and param_userId != None and param_bookName != None:
+            ret = bookManager().addBookRatingToDb(int(param_userId), str(param_bookId), float(param_rating), str(param_bookName))
+            if ret:
+                return jsonify({"message": "Ok"}), 200
+            else:
+                return jsonify({"message": "Bad Request"}), 409
 
 
 @app.route("/books/main", methods=['GET'])
 def recommendBooks():
-    param_userId = request.args.get('user_id')
-    return None
+
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    loop = asyncio.get_event_loop()
+
+    param_userId = request.args.get('userId')
+    if param_userId != None:
+        response = loop.run_until_complete(bookManager().getHomePageBooks(param_userId))
+        return response
+
+@app.route("/books/book-based-recommendation", methods=['GET'])
+def getBookBasedRecommendation():
+    param_bookId = request.args.get('bookId')
+    if param_bookId != None:
+        response = bookManager().getBookBasedRecommendation(param_bookId)
+        return response
 
 
 @app.route("/music/search", methods=['GET'])
@@ -112,12 +132,15 @@ def searchForSong():
 
 @app.route("/music/main", methods=['GET'])
 def getSongsMainScreen():
+
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    loop = asyncio.get_event_loop()
+
     param_userId = request.args.get('userId')
 
     if param_userId != None:
-        uId = param_userId
-    response = musicManager().getHomePageSongs(param_userId)
-    return response
+        response = loop.run_until_complete(musicManager().getHomePageSongs(param_userId))
+        return response
 
 
 @app.route("/music/song-based-recommendation", methods=['GET'])
@@ -131,7 +154,7 @@ def incrementplayingtime():
     param_userId = request.form.get('userId')
     param_songId = request.form.get('songId')
     if param_userId != None and param_songId != None:
-        ret = musicManager().addsonglistening(int(param_userId), str(param_songId))
+        ret = musicManager().addSonglistening(int(param_userId), str(param_songId))
         if ret:
             return jsonify({"message": "Ok"}), 200
         else:
@@ -139,4 +162,4 @@ def incrementplayingtime():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", debug=True, port=5001)
+    app.run(host="0.0.0.0", debug=False, port=5001)
