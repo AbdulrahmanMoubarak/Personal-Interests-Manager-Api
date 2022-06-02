@@ -16,6 +16,8 @@ from bs4 import BeautifulSoup
 import re
 from random import shuffle
 from random import randrange
+from app.UserManager import UserManager as userManager
+from app import TranslationManager as translator
 
 client_credentials_manager = SpotifyClientCredentials(client_id=spcred.CLIENT_ID,
                                                       client_secret=spcred.CLIENT_SECRET)
@@ -28,48 +30,54 @@ class MusicManager():
             "app/pim_database.db")
         return con
 
-    async def getHomePageSongs(self, userId):
+    async def getHomePageSongs(self, userId, lang):
         with ThreadPoolExecutor(max_workers=8) as executor:
             resList = []
             resListOrdered = []
             userArtistrec = executor.submit(self.__getUserArtistSongsSpotifyRecommendation, userId)
             userGenreRecs = executor.submit(self.__getUserGenreSongsSpotifyRecommendation, userId)
-            spotifyNewReleases = executor.submit(self.__getSpotifyNewReleases)
+            spotifyNewReleases = executor.submit(self.__getSpotifyNewReleases, lang)
             spotifyArtistRecommendation = executor.submit(self.__getUserArtistRecommendation, userId)
             userArtistTopSongs = executor.submit(self.__getUserArtistSongs, userId)
             userPlayedSongs = executor.submit(self.__getUserPlayedSongs, userId)
             userSongBasedRecommendation = executor.submit(self.__userSongBasedRecommendation, userId)
             userMoviesBasedRecommendation = executor.submit(self.__getMoviesBasedRecommendation, userId)
 
-            songBasedRec = SectionModel("Spotify Song Recommendations", userSongBasedRecommendation.result())
+            songBasedRec = SectionModel(translator.getTranslationFor("Spotify Song Recommendations", lang),
+                                        userSongBasedRecommendation.result())
             if len(songBasedRec.itemList) > 0:
                 resList.append(songBasedRec)
 
-            userSongs = SectionModel("Quick Picks", userPlayedSongs.result())
+            userSongs = SectionModel(translator.getTranslationFor("Quick Picks", lang), userPlayedSongs.result())
             if len(userSongs.itemList) > 0:
                 resListOrdered.append(userSongs)
 
-            artistSongs = SectionModel("Songs From Your Favourite Artists", userArtistTopSongs.result())
+            artistSongs = SectionModel(translator.getTranslationFor("Songs From Your Favourite Artists", lang),
+                                       userArtistTopSongs.result())
             if (len(artistSongs.itemList) > 0):
                 resList.append(artistSongs)
 
-            basedonArtist = SectionModel("Based On The Artists You Like", userArtistrec.result())
+            basedonArtist = SectionModel(translator.getTranslationFor("Based On The Artists You Like", lang),
+                                         userArtistrec.result())
             if (len(basedonArtist.itemList) > 0):
                 resList.append(basedonArtist)
 
-            artistRecommendation = SectionModel("Artists You May Like", spotifyArtistRecommendation.result())
+            artistRecommendation = SectionModel(translator.getTranslationFor("Artists You May Like", lang),
+                                                spotifyArtistRecommendation.result())
             if (len(artistRecommendation.itemList) > 0):
                 resList.append(artistRecommendation)
 
-            genreRecommendation = SectionModel("Based on Genres You Liked", userGenreRecs.result())
+            genreRecommendation = SectionModel(translator.getTranslationFor("Based on Genres You Liked", lang),
+                                               userGenreRecs.result())
             if (len(genreRecommendation.itemList) > 0):
                 resList.append(genreRecommendation)
 
             for rec in spotifyNewReleases.result():
                 resList.append(SectionModel(rec[0], rec[1]))
 
-            movieRecommendation = SectionModel("Based on Movies You Liked",userMoviesBasedRecommendation.result())
-            if(len(movieRecommendation.itemList) > 0):
+            movieRecommendation = SectionModel(translator.getTranslationFor("Based on Movies You Liked", lang),
+                                               userMoviesBasedRecommendation.result())
+            if (len(movieRecommendation.itemList) > 0):
                 resList.append(movieRecommendation)
 
             shuffle(resList)
@@ -87,7 +95,7 @@ class MusicManager():
 
             artistIds = str(song[0][2]).split(',')
             artistList = self.__findSongArtistsData(artistIds)
-            ytID = self.__findSongYoutubeId(song[0][4], artistList[0]['artist_name'])
+            ytID = self.__findSongYoutubeId2(song[0][4], artistList[0]['artist_name'])
             return json.dumps(SongModel(ytID, album[0][2], artistList, song[0]), default=SongModel.to_dict)
         else:
             return json.dumps(self.__findSpotifySongById(songSpotifyId), default=SongModel.to_dict)
@@ -96,7 +104,8 @@ class MusicManager():
         con = self.__connectToDB()
         res = []
         cur = con.cursor()
-        recs = cur.execute(''' SELECT artist_spotify_id, artist_name, image FROM song_artists ORDER BY popularity DESC LIMIT 100''').fetchall()
+        recs = cur.execute(
+            ''' SELECT artist_spotify_id, artist_name, image FROM song_artists ORDER BY popularity DESC LIMIT 100''').fetchall()
         for rec in recs:
             res.append(MediaItemPartialModel(rec[0], rec[1], rec[2], "artist"))
         return json.dumps(res, default=MediaItemPartialModel.to_dict)
@@ -118,13 +127,16 @@ class MusicManager():
         con = self.__connectToDB()
         cur = con.cursor()
         try:
-            playing_times = cur.execute('''SELECT playing_times FROM user_song_listening WHERE user_id = (?) AND song_id =(?) ''', [userId, songId]).fetchall()
+            playing_times = cur.execute(
+                '''SELECT playing_times FROM user_song_listening WHERE user_id = (?) AND song_id =(?) ''',
+                [userId, songId]).fetchall()
             if len(playing_times) == 0:
                 cur.execute('''INSERT INTO user_song_listening values(?,?,?)''', [userId, songId, 1])
             else:
                 playingtime = playing_times[0][0] + 1
-                cur.execute('''UPDATE user_song_listening SET playing_times = (?) WHERE user_id = (?) AND song_id = (?) ''',
-                            [playingtime, userId, songId])
+                cur.execute(
+                    '''UPDATE user_song_listening SET playing_times = (?) WHERE user_id = (?) AND song_id = (?) ''',
+                    [playingtime, userId, songId])
             con.commit()
             con.close()
             return True
@@ -176,7 +188,7 @@ class MusicManager():
 
     def __findSongYoutubeId2(self, songName="", artistName=""):
         artistName = artistName.replace(' ', '-').lower()
-        songName = songName.replace(' ', '-').lower()
+        songName = songName.replace(' ', '-').replace('/','-').lower()
         urlSongName = ""
         i = 0
         for word in songName.split(' '):
@@ -224,20 +236,21 @@ class MusicManager():
         rec = [tId, tAlbum, tArtists, tDuration, tName, tSpotifyLink, tDanceability, tEnergy, tLoudness, tTempo]
         return rec
 
-
-    def getSongBasedRecommendation(self, trackId):
+    def getSongBasedRecommendation(self, trackId, lang):
         con = self.__connectToDB()
         cur = con.cursor()
         secList = []
         retTrackRec = sp.recommendations(seed_tracks=[trackId])
-        secList.append(SectionModel("You May Also Like", self.__extractSpotifyRecommendationResponse(retTrackRec)))
+        secList.append(SectionModel(translator.getTranslationFor("You May Also Like", lang),
+                                    self.__extractSpotifyRecommendationResponse(retTrackRec)))
 
         track = sp.track(track_id=trackId)
         rec = self.__extractSongForDatabase(track)
 
         try:
-            cur.execute('''INSERT INTO songs_metadata (song_spotify_id, album_spotify_id, artists_spotify_id, duration, title, spotify_link, danceability, energy, loudness, tempo) VALUES (?,?,?,?,?,?,?,?,?,?)''',
-                        rec)
+            cur.execute(
+                '''INSERT INTO songs_metadata (song_spotify_id, album_spotify_id, artists_spotify_id, duration, title, spotify_link, danceability, energy, loudness, tempo) VALUES (?,?,?,?,?,?,?,?,?,?)''',
+                rec)
         except:
             print("error")
 
@@ -248,22 +261,25 @@ class MusicManager():
 
         localRec = SongRecommender().ContentWithSongId(trackId, con)
         retLocalRec = sp.tracks(localRec)
-        secList.append(SectionModel("Hobbitor Recommendations", self.__extractSpotifyRecommendationResponse(retLocalRec)))
+        secList.append(
+            SectionModel(translator.getTranslationFor("Hobbitor Recommendations", lang),
+                         self.__extractSpotifyRecommendationResponse(retLocalRec)))
 
         if len(aData) > 0:
             try:
-                seclist2 = self.__getAllArtistsRecommendation(aData)
+                seclist2 = self.__getAllArtistsRecommendation(aData, lang)
                 return json.dumps(secList + seclist2, default=SectionModel.to_dict)
             except:
                 pass
         else:
             return json.dumps(secList, default=SectionModel.to_dict)
 
-
     def __getMoviesBasedRecommendation(self, userId):
         con = self.__connectToDB()
         cur = con.cursor()
-        movieIds = cur.execute('''SELECT movie_id FROM movie_rating WHERE user_id = (?) AND rating >= 4 ORDER BY rating''', [userId]).fetchall()
+        movieIds = cur.execute(
+            '''SELECT movie_id FROM movie_rating WHERE user_id = (?) AND rating >= 4 ORDER BY rating''',
+            [userId]).fetchall()
         if len(movieIds) == 0:
             return []
         sList = []
@@ -273,7 +289,7 @@ class MusicManager():
             except:
                 continue
             if name != None:
-                searchNameRes = sp.search(name, limit=5, offset=randrange(0,3), type='track')
+                searchNameRes = sp.search(name, limit=5, offset=randrange(0, 3), type='track')
                 results = []
                 for song in searchNameRes["tracks"]["items"]:
                     tId = song["id"]
@@ -284,26 +300,25 @@ class MusicManager():
                         tAlbumImg = ""
                     type = "song"
                     results.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(tId, tName, tAlbumImg, type)))
-                if(len(results) > 0):
+                if (len(results) > 0):
                     sList = sList + results
         shuffle(sList)
         return sList
 
-
-
-    def __getAllArtistsRecommendation(self, artistList):
+    def __getAllArtistsRecommendation(self, artistList, lang):
         secList = []
         for artist in artistList:
             res = sp.artist_top_tracks(artist['artist_spotify_id'])
             secList.append(
-                SectionModel(artist['artist_name'] + " Top Songs", self.__extractSpotifyRecommendationResponse(res)))
+                SectionModel(translator.getTranslationFor(artist['artist_name'] + " Top Songs", lang),
+                             self.__extractSpotifyRecommendationResponse(res)))
 
         if len(artistList) > 1:
             randIdx = randrange(0, len(artistList) - 1)
         else:
             randIdx = 0
         simArtistsRes = sp.artist_related_artists(artistList[randIdx]['artist_spotify_id'])
-        secList.append(SectionModel("Artists Like " + artistList[randIdx]['artist_name'],
+        secList.append(SectionModel(translator.getTranslationFor("Artists Like ", lang) + artistList[randIdx]['artist_name'],
                                     self.__extractSpotifyArtistResponse(simArtistsRes)))
         return secList
 
@@ -314,7 +329,7 @@ class MusicManager():
                 if artistsId != "":
                     artist = sp.artist(artistsId)
                     rec = [artist['name'], artistsId, artist['images'][0]['url'], artist['followers']['total'],
-                            artist['popularity'], artist['external_urls']['spotify']]
+                           artist['popularity'], artist['external_urls']['spotify']]
                     alist.append(SongArtistModel.to_dict(SongArtistModel(rec)))
             except:
                 return []
@@ -325,13 +340,13 @@ class MusicManager():
         cur = con.cursor()
         userArtists = cur.execute('''SELECT liked_song_artists FROM app_user WHERE user_id = (?)''',
                                   [userId]).fetchall()
-        if(len(userArtists) > 0):
+        if (len(userArtists) > 0):
             artists = str(userArtists[0][0]).split(',')
             artistList = []
 
             randIdx = [*range(0, len(artists) - 1)]
             shuffle(randIdx)
-            if(len(randIdx)>4):
+            if (len(randIdx) > 4):
                 randIdx = randIdx[:5]
 
             idList = []
@@ -354,7 +369,7 @@ class MusicManager():
         cur = con.cursor()
         userGenres = cur.execute('''SELECT liked_song_genre FROM app_user WHERE user_id = (?)''',
                                  [userId]).fetchall()
-        if len(userGenres)>0:
+        if len(userGenres) > 0:
             genres = str(userGenres[0][0]).split(',')
             resList = []
             seedGenres = []
@@ -374,7 +389,7 @@ class MusicManager():
         cur = con.cursor()
         userGenres = cur.execute('''SELECT liked_song_artists FROM app_user WHERE user_id = (?)''',
                                  [userId]).fetchall()
-        if(len(userGenres)> 0):
+        if (len(userGenres) > 0):
             artists = str(userGenres[0][0]).split(',')
             artist = artists[randrange(0, len(artists) - 2)]
             if artist != "":
@@ -385,7 +400,7 @@ class MusicManager():
         else:
             return []
 
-    def __getSpotifyNewReleases(self):
+    def __getSpotifyNewReleases(self, lang):
         retList = []
         newRel = sp.new_releases(limit=50, offset=randrange(0, 70))
         albums = []
@@ -395,14 +410,14 @@ class MusicManager():
         retAlbumList = []
         for album in albums:
             retAlbumList.append(self.__extractAlbumData(album))
-        retList.append(("New Albums", retAlbumList))
+        retList.append((translator.getTranslationFor("New Albums", lang), retAlbumList))
         return retList
 
     def __getUserArtistSongs(self, userId):
         con = self.__connectToDB()
         cur = con.cursor()
         userArtists = cur.execute('''SELECT liked_song_artists FROM app_user WHERE user_id = (?)''',
-                                 [userId]).fetchall()
+                                  [userId]).fetchall()
 
         if len(userArtists) > 0:
             artists = str(userArtists[0][0]).split(',')
@@ -441,7 +456,7 @@ class MusicManager():
                 tAlbumImg = track['album']['images'][0]['url']
             except:
                 tAlbumImg = ""
-            if(tName not in nameList):
+            if (tName not in nameList):
                 trackList.append(MediaItemPartialModel.to_dict(MediaItemPartialModel(tId, tName, tAlbumImg, "song")))
                 nameList.append(tName)
         return trackList
@@ -471,15 +486,16 @@ class MusicManager():
     def __getUserPlayedSongs(self, userId):
         con = self.__connectToDB()
         cur = con.cursor()
-        userSongs = cur.execute('''SELECT song_id FROM user_song_listening WHERE user_id = (?) AND playing_times >= 3 ORDER BY playing_times DESC''',
-                                [userId]).fetchall()
+        userSongs = cur.execute(
+            '''SELECT song_id FROM user_song_listening WHERE user_id = (?) AND playing_times >= 3 ORDER BY playing_times DESC''',
+            [userId]).fetchall()
 
         if len(userSongs) > 0:
+            shuffle(userSongs)
             idList = []
             for songId in userSongs:
                 idList.append(songId[0])
             tracks = sp.tracks(idList)
-            shuffle(tracks)
             return self.__extractSpotifyRecommendationResponse(tracks)
         else:
             return []
@@ -491,13 +507,13 @@ class MusicManager():
                                 [userId]).fetchall()
 
         if len(userSongs) > 0:
-            if(len(userSongs)==1):
-                randIdx=[0]
+            if (len(userSongs) == 1):
+                randIdx = [0]
             else:
                 randIdx = [*range(0, len(userSongs) - 1)]
                 shuffle(randIdx)
 
-            if(len(randIdx)>4):
+            if (len(randIdx) > 4):
                 randIdx = randIdx[:5]
 
             idList = []
@@ -534,3 +550,74 @@ class MusicManager():
         except:
             pass
         return resList
+
+    def addUserLocalMusic(self, userId, songs=[]):
+        con = self.__connectToDB()
+        cur = con.cursor()
+        try:
+            plId = cur.execute('''SELECT playlist_id FROM user_playlists WHERE playlist_name = (?)''',
+                               ["My Local Music"]).fetchall()[0][0]
+            if plId == None:
+                userManager().createPlaylist(userId, "My Local Music", "music")
+                plId = cur.execute('''SELECT playlist_id FROM user_playlists WHERE playlist_name = (?)''',
+                                   ["My Local Music"]).fetchall()[0][0]
+        except:
+            userManager().createPlaylist(userId, "My Local Music", "music")
+            plId = cur.execute('''SELECT playlist_id FROM user_playlists WHERE playlist_name = (?)''',
+                               ["My Local Music"]).fetchall()[0][0]
+        con.close()
+        for song in songs:
+            res = sp.search(song, limit=1, offset=0, type="track")
+            try:
+                for song in res["tracks"]["items"]:
+                    tId = song["id"]
+                    tName = song["name"]
+                    try:
+                        tAlbumImg = song['album']['images'][0]['url']
+                    except:
+                        tAlbumImg = ""
+                    artistList = []
+                    try:
+                        for artist in song["album"]["artists"]:
+                            artistList.append(artist["id"])
+                            self.__addUserArtistPref(userId, artist["id"])
+                    except:
+                        artistList = []
+                    self.__addItemToMusicPlaylist(plId, tId, tName, tAlbumImg)
+                    self.__setUserSongListening(userId, tId)
+            except:
+                continue
+        return True
+
+    def __addItemToMusicPlaylist(self, plId, itemId, itemName, itemImage):
+        userManager().addPlaylistItem(plId, itemId, itemName, itemImage)
+
+    def __addUserArtistPref(self, userId, artistId):
+        con = self.__connectToDB()
+        cur = con.cursor()
+        userArtists = str(cur.execute('''SELECT liked_song_artists FROM app_user WHERE user_id = (?)''',
+                                      [userId]).fetchall()[0][0])
+        if not artistId in userArtists:
+            userArtists += artistId + ","
+        cur.execute('''UPDATE app_user SET liked_song_artists = (?) WHERE user_id = (?)''', [userArtists, userId])
+        con.commit()
+        con.close()
+
+    def __setUserSongListening(self, userId, songId):
+        con = self.__connectToDB()
+        cur = con.cursor()
+        try:
+            playing_times = cur.execute(
+                '''SELECT playing_times FROM user_song_listening WHERE user_id = (?) AND song_id =(?) ''',
+                [userId, songId]).fetchall()
+            if len(playing_times) == 0:
+                cur.execute('''INSERT INTO user_song_listening values(?,?,?)''', [userId, songId, 3])
+            else:
+                playingtime = playing_times[0][0] + 2
+                cur.execute(
+                    '''UPDATE user_song_listening SET playing_times = (?) WHERE user_id = (?) AND song_id = (?) ''',
+                    [playingtime, userId, songId])
+            con.commit()
+            con.close()
+        except:
+            return
