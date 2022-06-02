@@ -9,6 +9,7 @@ from urllib.request import urlopen
 from app.ProjectModels import BooksModel
 from app.ProjectModels import MediaItemPartialModel
 from app.ProjectModels import SectionModel
+from app import TranslationManager as translator
 
 class BooksManager:
     def __connectToDB(self):
@@ -32,9 +33,9 @@ class BooksManager:
             bList.append(bModel)
         return json.dumps(bList, default=BooksModel.to_dict)
 
-    def findBookById(self, id, userId):  #Done
+    def findBookById(self, id, userId, lang):  #Done
         urlQueryText = id
-        api = "https://www.googleapis.com/books/v1/volumes?q=" + urlQueryText +"&maxResults=1"
+        api = "https://www.googleapis.com/books/v1/volumes?langRestrict="+lang+"&q=" + urlQueryText +"&maxResults=1"
         resp  = urlopen(api)
         book_data = json.load(resp)
         return json.dumps(BooksModel(self.__extractBookDetails(book_data, userId)), default=BooksModel.to_dict)
@@ -140,33 +141,33 @@ class BooksManager:
             con.close()
             return False
 
-    def getBookBasedRecommendation(self, bookId):
+    def getBookBasedRecommendation(self, bookId, lang):
         urlQueryText = bookId
-        api = "https://www.googleapis.com/books/v1/volumes?q=" + urlQueryText +"&maxResults=1"
+        api = "https://www.googleapis.com/books/v1/volumes?langRestrict="+lang+"&q=" + urlQueryText +"&maxResults=1"
         resp = urlopen(api)
         book_data = json.load(resp)
         book = BooksModel(self.__extractBookDetails(book_data, -1))
-        simAuth = self.__getSimilarAuthorBooks(book.book_author)
-        simCat = self.__getSimilarCategoryBooks(book.categories)
+        simAuth = self.__getSimilarAuthorBooks(book.book_author, lang)
+        simCat = self.__getSimilarCategoryBooks(book.categories, lang)
         return json.dumps(simAuth + simCat, default=SectionModel.to_dict)
 
-    def __getSimilarAuthorBooks(self, bookAuthors):
+    def __getSimilarAuthorBooks(self, bookAuthors, lang):
         secList = []
         for author in bookAuthors.split(','):
             if(author != ""):
                 urlQueryText = author
                 modQuery = urllib.parse.quote_plus(urlQueryText)
-                api = "https://www.googleapis.com/books/v1/volumes?q=inauthor:" + modQuery +"&maxResults=40"
+                api = "https://www.googleapis.com/books/v1/volumes?langRestrict="+lang+"&q=inauthor:" + modQuery +"&maxResults=40"
                 resp = urlopen(api)
                 book_data = json.load(resp)
-                secList.append(SectionModel("Works By " + author, self.__extractBookListResponse(book_data)))
+                secList.append(SectionModel(translator.getTranslationFor("Works By ", lang) + author, self.__extractBookListResponse(book_data)))
         return secList
 
-    def __getSimilarCategoryBooks(self, bookCat):
+    def __getSimilarCategoryBooks(self, bookCat, lang):
         secList = []
         urlQueryText = bookCat
         modQuery = urllib.parse.quote_plus(urlQueryText)
-        api = "https://www.googleapis.com/books/v1/volumes?q=subject:" + modQuery +"&maxResults=40"
+        api = "https://www.googleapis.com/books/v1/volumes?langRestrict="+lang+"&q=subject:" + modQuery +"&maxResults=40"
         resp = urlopen(api)
         book_data = json.load(resp)
         secList.append(SectionModel(bookCat.replace(',', '') + " Books", self.__extractBookListResponse(book_data)))
@@ -182,53 +183,53 @@ class BooksManager:
         secList.append(SectionModel("See Also", self.__extractBookListResponse(book_data)))
         return secList
 
-    async def getHomePageBooks(self, userId):
+    async def getHomePageBooks(self, userId, lang):
         secList = []
         randomGenresList = self.__getRandomGenres()
 
-        bestSellers = self.__getBestSellers()
+        bestSellers = self.__getBestSellers(lang)
 
         asyncio.set_event_loop(asyncio.new_event_loop())
-        genresBookList = self.__getGenresSections(randomGenresList)
+        genresBookList = self.__getGenresSections(randomGenresList, lang)
 
-        secList.append(SectionModel("Best Sellers", bestSellers))
+        secList.append(SectionModel(translator.getTranslationFor("Best Sellers", lang), bestSellers))
         return json.dumps(secList + genresBookList, default=SectionModel.to_dict)
 
-    def searchForBook(self, query=""):
+    def searchForBook(self, query="", lang="en"):
         urlQueryText = query.replace(' ', '+')
-        api = "https://www.googleapis.com/books/v1/volumes?q=" + urlQueryText +"&maxResults=40"
+        api = "https://www.googleapis.com/books/v1/volumes?langRestrict="+lang+"&q=" + urlQueryText +"&maxResults=40"
         try:
             resp = urlopen(api)
         except:
             modQuery = urllib.parse.quote_plus(urlQueryText)
-            api = "https://www.googleapis.com/books/v1/volumes?q=" + modQuery +"&maxResults=40"
+            api = "https://www.googleapis.com/books/v1/volumes?langRestrict="+lang+"&q=" + modQuery +"&maxResults=40"
             resp  = urlopen(api)
         book_data = json.load(resp)
         return json.dumps(self.__extractBookListResponse(book_data))
 
 
-    def __getBestSellers(self):
+    def __getBestSellers(self, lang):
         urlQueryText = "best selling books in usa".replace(' ', '+')
         urlParams = urllib.parse.quote_plus(urlQueryText)
-        api = "https://www.googleapis.com/books/v1/volumes?q=" + urlParams +"&maxResults=40&startIndex="+ str(randrange(0, 50))
+        api = "https://www.googleapis.com/books/v1/volumes?langRestrict="+lang+"&q=" + urlParams +"&maxResults=40&startIndex="+ str(randrange(0, 50))
         resp = urlopen(api)
         book_data = json.load(resp)
         return self.__extractBookListResponse(book_data)
 
-    def __getGenresSections(self, genreList):
+    def __getGenresSections(self, genreList, lang):
         exList = []
         secList = []
         for genre in genreList:
             urlQueryText = "subject:"+genre.replace(' ','+').replace('&', '').replace('|', '')
-            api = "https://www.googleapis.com/books/v1/volumes?q=" + urlQueryText +"&maxResults=40&startIndex="+ str(randrange(0, 50))
+            api = "https://www.googleapis.com/books/v1/volumes?langRestrict="+lang+"&q=" + urlQueryText +"&maxResults=40&startIndex="+ str(randrange(0, 50))
             try:
                 resp = urlopen(api)
             except:
                 modQuery = urllib.parse.quote_plus(urlQueryText)
-                api = "https://www.googleapis.com/books/v1/volumes?q=" + modQuery +"&maxResults=40&startIndex="+ str(randrange(0, 50))
+                api = "https://www.googleapis.com/books/v1/volumes?langRestrict="+lang+"&q=" + modQuery +"&maxResults=40&startIndex="+ str(randrange(0, 50))
                 resp = urlopen(api)
             book_data = json.load(resp)
-            x = SectionModel("Popular " + genre.replace('|','') +" Books", self.__extractBookListResponse(book_data))
+            x = SectionModel(translator.getTranslationFor("Popular " + genre.replace('|','') +" Books", lang), self.__extractBookListResponse(book_data))
             exList.append(x)
         for exe in exList:
             if len(exe.itemList)> 0:
