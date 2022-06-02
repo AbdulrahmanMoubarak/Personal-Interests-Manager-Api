@@ -103,12 +103,14 @@ def searchForMovie():
     search_query_name = request.args.get('name')
     search_query_id = request.args.get('id')
     param_userId = request.args.get('userId')
+    param_lang = request.args.get('lang')
+
     if search_query_genre != None:
         resp = movieManager().findMovieByGenre(search_query_genre)
     elif search_query_name != None:
-        resp = movieManager().findMovieByName(search_query_name)
+        resp = movieManager().findMovieByName(search_query_name, param_lang)
     elif search_query_id != None and param_userId != None:
-        resp = movieManager().findMovieById(search_query_id, param_userId)
+        resp = movieManager().findMovieById(search_query_id, param_userId, param_lang)
     else:
         resp = jsonify({"message": "Bad Request"}), 409
     gc.collect()
@@ -137,7 +139,8 @@ def rateMovie():
 @app.route("/movies/main/sections", methods=['GET'])
 def getMoviesMainSections():
     param_userId = request.args.get("userId")
-    response = movieManager().getHomePageSectionNames(param_userId)
+    param_lang = request.args.get("lang")
+    response = movieManager().getHomePageSectionNames(param_userId, param_lang)
     gc.collect()
     return response
 
@@ -148,8 +151,9 @@ def getSectionContents():
     userId = request.args.get('userId')
     year = request.args.get('year')
     genre = request.args.get('genre')
+    lang = request.args.get('lang')
     if name != None:
-        resp = movieManager().getSectionContent(name, userId, year, genre)
+        resp = movieManager().getSectionContent(name, userId, year, genre, lang)
         gc.collect()
         return resp
 
@@ -171,8 +175,9 @@ def getMoviesMainScreen():
 @app.route("/movies/credits", methods=['GET'])
 def getMovieCredits():
     param_movieId = request.args.get('movieId')
+    param_language = request.args.get('lang')
     if param_movieId != None:
-        response = movieManager().findMovieCast(param_movieId)
+        response = movieManager().findMovieCast(param_movieId, param_language)
         gc.collect()
         return response
 
@@ -181,8 +186,9 @@ def getMovieCredits():
 def getMovieBasedRecommendation():
     param_movieId = request.args.get('movieId')
     param_userId = request.args.get('userId')
+    param_lang = request.args.get('lang')
     if param_movieId != None:
-        response = movieManager().getMovieBasedRecommendation(param_movieId, param_userId)
+        response = movieManager().getMovieBasedRecommendation(param_movieId, param_userId, param_lang)
         gc.collect()
         return response
 
@@ -191,6 +197,7 @@ def getMovieBasedRecommendation():
 def searchForBook():
     search_query_id = request.args.get('id')
     search_query = request.args.get('q')
+    search_lang = request.args.get('lang')
     param_user_id = request.args.get('userId')
     search_query_name = request.args.get('name')
     search_query_author = request.args.get('author')
@@ -199,9 +206,9 @@ def searchForBook():
     elif search_query_name != None:
         resp = bookManager().findBookByName(search_query_name)
     elif search_query_id != None and param_user_id != None:
-        resp = bookManager().findBookById(search_query_id, param_user_id)
+        resp = bookManager().findBookById(search_query_id, param_user_id, search_lang)
     elif search_query != None:
-        resp = bookManager().searchForBook(search_query)
+        resp = bookManager().searchForBook(search_query, search_lang)
     else:
         resp = jsonify({"message": "Ok"}), 200
     gc.collect()
@@ -231,8 +238,9 @@ def recommendBooks():
     loop = asyncio.get_event_loop()
 
     param_userId = request.args.get('userId')
+    param_lang = request.args.get('lang')
     if param_userId != None:
-        response = loop.run_until_complete(bookManager().getHomePageBooks(param_userId))
+        response = loop.run_until_complete(bookManager().getHomePageBooks(param_userId, param_lang))
         gc.collect()
         return response
 
@@ -240,8 +248,9 @@ def recommendBooks():
 @app.route("/books/book-based-recommendation", methods=['GET'])
 def getBookBasedRecommendation():
     param_bookId = request.args.get('bookId')
+    param_lang = request.args.get('lang')
     if param_bookId != None:
-        response = bookManager().getBookBasedRecommendation(param_bookId)
+        response = bookManager().getBookBasedRecommendation(param_bookId, param_lang)
         gc.collect()
         return response
 
@@ -265,9 +274,10 @@ def getSongsMainScreen():
     loop = asyncio.get_event_loop()
 
     param_userId = request.args.get('userId')
+    param_lang = request.args.get('lang')
 
     if param_userId != None:
-        response = loop.run_until_complete(musicManager().getHomePageSongs(param_userId))
+        response = loop.run_until_complete(musicManager().getHomePageSongs(param_userId, param_lang))
         gc.collect()
         return response
 
@@ -289,7 +299,8 @@ def getSongGenres():
 @app.route("/music/song-based-recommendation", methods=['GET'])
 def getSongBasedRecommendation():
     param_songId = request.args.get('songId')
-    resp = musicManager().getSongBasedRecommendation(param_songId)
+    param_lang = request.args.get('lang')
+    resp = musicManager().getSongBasedRecommendation(param_songId, param_lang)
     gc.collect()
     return resp
 
@@ -300,6 +311,18 @@ def incrementplayingtime():
     param_songId = request.form.get('songId')
     if param_userId != None and param_songId != None:
         ret = musicManager().addSonglistening(int(param_userId), str(param_songId))
+        gc.collect()
+        if ret:
+            return jsonify({"message": "Ok"}), 200
+        else:
+            return jsonify({"message": "Bad Request"}), 400
+
+@app.route("/song/local-music-upload", methods=['POST'])
+def updateUserLocalMusicData():
+    param_userId = request.form.get('userId')
+    param_songs = request.form.getlist('songs[]')
+    if param_userId != None and param_songs != None:
+        ret = musicManager().addUserLocalMusic(int(param_userId), param_songs)
         gc.collect()
         if ret:
             return jsonify({"message": "Ok"}), 200
