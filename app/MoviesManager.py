@@ -17,10 +17,11 @@ from app.ProjectModels import MediaItemPartialModel
 from app.ProjectModels import MovieModel
 from app.ProjectModels import SectionModel
 from app.TMDBCredentials import TmdbCredentials
+from app import TranslationManager
 
 tmdb = TMDb()
-tmdb.language = 'en'
 tmdb.debug = True
+tmdb.language = 'en'
 tmdb.api_key = TmdbCredentials.API_KEY
 
 
@@ -30,35 +31,40 @@ class MoviesManager:
             "app/pim_database.db")
         return con
 
-    def getHomePageSectionNames(self, userId):
+    def getHomePageSectionNames(self, userId, lang):
         randomYear = randrange(2000, int(date.today().year))
         randomGenre = self.__getRandomGenre()
-        secList = [{"name": "Trending Movies Today", "userId": str(userId)},
-                   {"name": "Trending Movies This Week", "userId": str(userId)},
-                   {"name": "Upcoming Movies", "userId": str(userId)},
-                   {"name": "Popular " + str(randomGenre[1]) + " Movies", "genre": str(randomGenre[0]), "userId": str(userId)},
-                   {"name": "Popular Movies in " + str(randomYear), "year": str(randomYear), "userId": str(userId)},
-                   {"name": "Top Rated Movies", "userId": str(userId)},
+        secList = [{"name": TranslationManager.getTranslationFor("Trending Movies Today", lang), "userId": str(userId)},
+                   {"name": TranslationManager.getTranslationFor("Trending Movies This Week", lang), "userId": str(userId)},
+                   {"name": TranslationManager.getTranslationFor("Upcoming Movies", lang), "userId": str(userId)},
+                   {"name": TranslationManager.getTranslationFor("Popular " + str(randomGenre[1]) + " Movies", lang), "genre": str(randomGenre[0]),
+                    "userId": str(userId)},
+                   {"name": TranslationManager.getTranslationFor("Popular Movies in ", lang) + str(randomYear), "year": str(randomYear), "userId": str(userId)},
+                   {"name": TranslationManager.getTranslationFor("Top Rated Movies", lang), "userId": str(userId)},
                    {"name": "People Like You Also Viewed", "userId": str(userId)},
                    {"name": "Hobbitor Recommendation", "userId": str(userId)}]
         return json.dumps(secList)
 
-    def getSectionContent(self, sectionName, userId=-1, randomYear=None, randomGenre=None):
-        if sectionName == "Trending Movies Today":
+    def getSectionContent(self, sectionName, userId=-1, randomYear=None, randomGenre=None, lang="en"):
+        if lang is not None:
+            tmdb.language = lang
+        else:
+            tmdb.language = 'en'
+        if sectionName == TranslationManager.getTranslationFor("Trending Movies Today", lang):
             return json.dumps(self.__getDayTrendingMovies())
-        elif sectionName == "Trending Movies This Week":
+        elif sectionName == TranslationManager.getTranslationFor("Trending Movies This Week", lang):
             return json.dumps(self.__getWeekTrendingMovies())
         elif randomYear != None:
             return json.dumps(self.__getMoviesFromTmdbDiscover(int(randomYear)))
         elif randomGenre != None:
             return json.dumps(self.__getRandomGenreMoviesFromTmdb(int(randomGenre)))
-        elif sectionName == "Top Rated Movies":
+        elif sectionName == TranslationManager.getTranslationFor("Top Rated Movies", lang):
             return json.dumps(self.__getRandomTopRatedMovies())
-        elif sectionName == "Upcoming Movies":
+        elif sectionName == TranslationManager.getTranslationFor("Upcoming Movies", lang):
             return json.dumps(self.__getUpcomingMovies())
-        elif sectionName == "People Like You Also Viewed":
+        elif sectionName == TranslationManager.getTranslationFor("People Like You Also Viewed", lang):
             return json.dumps(self.__getCollabLocalRecommendation(userId))
-        elif sectionName == "Hobbitor Recommendation":
+        elif sectionName == TranslationManager.getTranslationFor("Hobbitor Recommendation", lang):
             return json.dumps(self.__getContentLocalRecommendation(userId))
         else:
             return json.dumps([])
@@ -107,13 +113,21 @@ class MoviesManager:
 
             return json.dumps(secList, default=SectionModel.to_dict)
 
-    def findMovieCast(self, movieId):
+    def findMovieCast(self, movieId, lang):
+        if lang is not None:
+            tmdb.language = lang
+        else:
+            tmdb.language = 'en'
         tmdb_movie = Movie()
         response = tmdb_movie.credits(movieId)
         cast = self.__extractCastFromResponse(response)
         return json.dumps(cast, default=MediaItemPartialModel.to_dict)
 
-    def getMovieBasedRecommendation(self, movieId, userId):
+    def getMovieBasedRecommendation(self, movieId, userId, lang):
+        if lang is not None:
+            tmdb.language = lang
+        else:
+            tmdb.language = 'en'
         sec_list = []
         tmdb_movie = Movie()
         tmdb_collection = Collection()
@@ -131,39 +145,54 @@ class MoviesManager:
 
         if movieCollection != None:
             collectionResponse = self.__extractMoviesFromResponse(tmdb_collection.details(movieCollection)['parts'])
-            sameCollection = SectionModel("Movies From The Collection", collectionResponse)
+            sameCollection = SectionModel(TranslationManager.getTranslationFor("Movies From The Collection", lang),
+                                          collectionResponse)
             sec_list.append(sameCollection)
 
         similarMoviesResponse = self.__extractMoviesFromResponse(tmdb_movie.similar(movieId, page=randrange(1, 10)))
-        similarMovies = SectionModel("Similar Movies", similarMoviesResponse)
-        sec_list.append(similarMovies)
+        if len(similarMoviesResponse) > 0:
+            similarMovies = SectionModel(TranslationManager.getTranslationFor("Similar Movies", lang),
+                                         similarMoviesResponse)
+            sec_list.append(similarMovies)
 
-        if (len(mDetails['genres']) > 1):
-            randNum = randrange(0, len(mDetails['genres']) - 1)
-        else:
-            randNum = 0
-        movieGenre = mDetails['genres'][randNum]
-        similarMovieGenreResponse = self.__getRandomGenreMoviesFromTmdb(movieGenre['id'])
-        similarByGenre = SectionModel("Popular " + movieGenre['name'] + " Movies", similarMovieGenreResponse)
-        sec_list.append(similarByGenre)
+        try:
+            if (len(mDetails['genres']) > 1):
+                randNum = randrange(0, len(mDetails['genres']) - 1)
+            else:
+                randNum = 0
+            movieGenre = mDetails['genres'][randNum]
+            similarMovieGenreResponse = self.__getRandomGenreMoviesFromTmdb(movieGenre['id'])
+            similarByGenre = SectionModel(
+                TranslationManager.getTranslationFor("Popular " + movieGenre['name'] + " Movies", lang),
+                similarMovieGenreResponse)
+            sec_list.append(similarByGenre)
+        except:
+            pass
 
-        if len(mDetails['production_companies']) > 1:
-            movieCompany = mDetails['production_companies'][randrange(0, len(mDetails['production_companies']) - 1)]
-        else:
-            movieCompany = mDetails['production_companies'][0]
+        try:
+            if len(mDetails['production_companies']) > 1:
+                movieCompany = mDetails['production_companies'][randrange(0, len(mDetails['production_companies']) - 1)]
+            else:
+                movieCompany = mDetails['production_companies'][0]
+        except:
+            movieCompany = ""
 
-        similarCompanyResponse = self.__extractMoviesFromResponse(tmdb_company.movies(movieCompany['id']))
-        similarByComp = SectionModel("Also From " + movieCompany['name'], similarCompanyResponse)
-        sec_list.append(similarByComp)
+        if movieCompany != "":
+            similarCompanyResponse = self.__extractMoviesFromResponse(tmdb_company.movies(movieCompany['id']))
+            similarByComp = SectionModel(
+                TranslationManager.getTranslationFor("Also From ", lang) + movieCompany['name'],
+                similarCompanyResponse)
+            sec_list.append(similarByComp)
 
         collabRes = peopleRecommendation.result()
         if len(collabRes) > 0:
-            peopleAlsoSec = SectionModel("People Who Liked This Also Liked", collabRes)
+            peopleAlsoSec = SectionModel(TranslationManager.getTranslationFor("People Who Liked This Also Liked", lang),
+                                         collabRes)
             sec_list.append(peopleAlsoSec)
 
         contentRes = contentRecommendation.result()
         if (len(contentRes) > 0):
-            hobbitorRecSec = SectionModel("Recommended By Hobbitor", contentRes)
+            hobbitorRecSec = SectionModel(TranslationManager.getTranslationFor("Recommended By Hobbitor", lang), contentRes)
             sec_list.append(hobbitorRecSec)
 
         return json.dumps(sec_list, default=SectionModel.to_dict)
@@ -271,30 +300,29 @@ class MoviesManager:
 
         return json.dumps(secList, default=SectionModel.to_dict)
 
-    def findMovieByName(self, name):
+    def findMovieByName(self, name, lang):
+        if lang is not None:
+            tmdb.language = lang
+        else:
+            tmdb.language = 'en'
         tmdb_movieList = self.__tmdbSearchForMovie(name)
         return json.dumps(tmdb_movieList, default=MediaItemPartialModel.to_dict)
 
-    def findMovieById(self, id, userId):
+    def findMovieById(self, id, userId, lang):
         id = int(id)
-
+        if lang is not None:
+            tmdb.language = lang
+        else:
+            tmdb.language = 'en'
         con = self.__connectToDB()
         cur = con.cursor()
-        cur.execute('''SELECT * FROM movies_metadata WHERE movie_id = (?)''', [id])
-        result = cur.fetchall()
-
         try:
             user_rating = cur.execute(''' SELECT rating FROM movie_rating WHERE user_id = (?) AND movie_id = (?)''',
                                       [userId, id]).fetchall()[0][0]
         except:
             user_rating = -1.0
         con.close()
-        if len(result) == 0:
-            return json.dumps(self.__tmdbGetMovieById(id, user_rating), default=MovieModel.to_dict)
-        else:
-            mMovie = MovieModel(result[0])
-            mMovie.user_rating = user_rating
-            return json.dumps(mMovie, default=MovieModel.to_dict)
+        return json.dumps(self.__tmdbGetMovieById(id, user_rating), default=MovieModel.to_dict)
 
     def __findSimilarMoviesInDbByName(self, movie):
         con = self.__connectToDB()
