@@ -1,0 +1,21 @@
+categories:
+- Recommend
+conversations:
+- - اقترح
+  - ماذا تريد (افلام او اغاني او كتاب).
+- - افلام
+  - نوع الفيلم؟
+- - كتاب
+  - اسم الكاتب؟
+- - اغاني
+  - اسم المغني؟
+- - recommend me something
+  - to recommend books write Books, to recommnend movies write Movies, to recommnend songs write Songs.
+- - recommend
+  - to recommend books write Books, to recommnend movies write Movies, to recommnend songs write Songs.
+- - Books
+  - Please enter Author name.
+- - Movies
+  - Please enter Movie genre.
+- - Songs
+  - Please enter artist name.
