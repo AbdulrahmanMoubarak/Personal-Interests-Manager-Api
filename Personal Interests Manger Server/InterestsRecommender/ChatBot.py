@@ -39,7 +39,7 @@ class ChatBot:
             if len(request) != 0:
                 df = pd.read_sql_query("""Select artist_name, artist_spotify_id from song_artists where artist_name LIKE '%""" + str(request) + """%'""",conn)
                 df2 = pd.read_sql_query("""Select title, artists_spotify_id from songs_metadata""", conn)
-                df2.rename(columns={'artists_spotify_id': 'artist_spotify_id'}, inplace=True)
+                df['artists_spotify_id'] = df['artist_spotify_id'].astype(str) + ','
                 merged = pd.merge(df, df2)
                 if merged.empty:
                     return "bot: Sorry couldnt Find anything"
