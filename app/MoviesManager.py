@@ -41,8 +41,8 @@ class MoviesManager:
                     "userId": str(userId)},
                    {"name": TranslationManager.getTranslationFor("Popular Movies in ", lang) + str(randomYear), "year": str(randomYear), "userId": str(userId)},
                    {"name": TranslationManager.getTranslationFor("Top Rated Movies", lang), "userId": str(userId)},
-                   {"name": "People Like You Also Viewed", "userId": str(userId)},
-                   {"name": "Hobbitor Recommendation", "userId": str(userId)}]
+                   {"name": "Hobbitor Recommendation", "userId": str(userId)},
+                   {"name": "People Like You Also Viewed", "userId": str(userId)}]
         return json.dumps(secList)
 
     def getSectionContent(self, sectionName, userId=-1, randomYear=None, randomGenre=None, lang="en"):

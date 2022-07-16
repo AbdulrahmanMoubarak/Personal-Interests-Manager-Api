@@ -188,7 +188,7 @@ class MusicManager():
 
     def __findSongYoutubeId2(self, songName="", artistName=""):
         artistName = artistName.replace(' ', '-').lower()
-        songName = songName.replace(' ', '-').replace('/','-').lower()
+        songName = songName.replace(' ', '-').replace('/',' ').lower()
         urlSongName = ""
         i = 0
         for word in songName.split(' '):

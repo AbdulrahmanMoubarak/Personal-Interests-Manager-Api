@@ -141,7 +141,22 @@ class SongArtistModel:
             raise TypeError("Unexpected type {0}".format(type_name))
 
 
+class ChatMessageModel:
+    def __init__(self, id, message, isChatbot = True):
+        self.id = id
+        self.message = message
+        self.isChatbot = isChatbot
 
+    def to_dict(item):
+        if isinstance(item, ChatMessageModel):
+            return {
+                "messageId": item.id,
+                "message": item.message,
+                "isChatbotMessage": item.isChatbot,
+            }
+        else:
+            type_name = item.__class__.__name__
+            raise TypeError("Unexpected type {0}".format(type_name))
 
 
 

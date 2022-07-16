@@ -30,7 +30,7 @@ def getTranslationFor(phrase="", lang="en"):
             else:
                 return phrase
 
-        elif phrase == "Recommended By Hobbitor" or phrase =="Hobbitor Recommendations":
+        elif phrase == "Recommended By Hobbitor" or phrase =="Hobbitor Recommendations" or phrase =="Hobbitor Recommendation":
             if lang == "ar":
                 return "ترشيحات من المهوياتي"
             else:

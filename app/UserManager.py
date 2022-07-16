@@ -68,13 +68,19 @@ class UserManager():
     def addPlaylistItem(self, PlaylistId, itemId, itemName, itemImage):
         db = self.__connectToDB()
         cursor = db.cursor()
-        if (PlaylistId != None and itemId != None and itemName != None and itemImage != None):
+        res = cursor.execute('''SELECT * FROM playlist_items WHERE playlist_id = (?) AND item_id = (?)'''
+                             , [PlaylistId, itemId]).fetchall()
+        if len(res) != 0:
+            db.close()
+            return False
+        if PlaylistId != None and itemId != None and itemName != None and itemImage != None:
             try:
                 cursor.execute('INSERT INTO playlist_items (playlist_id,item_id,item_name,item_image) VALUES(?,?,?,?)',
                                [PlaylistId, itemId, itemName, itemImage])
                 db.commit()
                 cursor.execute('''UPDATE user_playlists SET (playlist_image) = (?) WHERE playlist_id = (?)''',
                                [itemImage, PlaylistId])
+                db.commit()
                 db.close()
                 return True
             except:
@@ -106,8 +112,9 @@ class UserManager():
         con = self.__connectToDB()
         cursor = con.cursor()
         plType = \
-        cursor.execute('''SELECT playlist_type FROM user_playlists WHERE playlist_id = (?)''', [playlistId]).fetchall()[
-            0][0]
+            cursor.execute('''SELECT playlist_type FROM user_playlists WHERE playlist_id = (?)''',
+                           [playlistId]).fetchall()[
+                0][0]
         pls = []
         recs = cursor.execute('''SELECT * FROM playlist_items WHERE playlist_id = (?)''', [playlistId]).fetchall()
         for rec in recs:

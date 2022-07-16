@@ -1,11 +1,15 @@
 import asyncio
 import gc
+import json
+
 from flask import Flask, request, jsonify
 
 from app.BooksManager import BooksManager as bookManager
 from app.MoviesManager import MoviesManager as movieManager
 from app.MusicManager import MusicManager as musicManager
 from app.UserManager import UserManager as userManager
+# from app.ChatBot.ChatBot import ChatBot
+from app.ProjectModels import ChatMessageModel
 
 app = Flask(__name__)
 
@@ -96,6 +100,14 @@ def getAllPlaylistItems():
     resp = userManager().getUserPlaylistItems(param_plId)
     gc.collect()
     return resp
+
+# @app.route("/chatbot/chat", methods=['GET'])
+# def chat():
+#     param_msgId = int(request.args.get("msgId"))
+#     param_msg = request.args.get("msg")
+#     reply = ChatBot().Chat(param_msg)
+#     gc.collect()
+#     return json.dumps(ChatMessageModel(param_msgId+1, reply), default=ChatMessageModel.to_dict)
 
 @app.route("/movies/search", methods=['GET'])
 def searchForMovie():
